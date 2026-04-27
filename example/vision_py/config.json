@@ -1,0 +1,8 @@
+{
+    "camera_id": "v4l2src device=/dev/video2 ! decodebin ! videoconvert ! video/x-raw, format=BGR ! appsink drop=1",
+    "video_path": "test_video.mp4",
+    "use_local_video": false,
+    "udp_ip": "127.0.0.1",
+    "udp_port": 8080,
+    "black_line_threshold": 60
+}
