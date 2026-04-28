@@ -75,21 +75,26 @@ void RobotDriver::jump() {
 void RobotDriver::turn90Degree(bool is_left) {
     if (!is_connected || sport_client == nullptr) return;
 
-    // 角速度标定：0.5 rad/s，转 1.57 rad (90度) 大约需要 3.14 秒
+    // 🌟 修复底层安全保护断联：采用心跳式循环下发指令 🌟
+    // 角速度标定：0.5 rad/s 下转 90 度 (1.5708 rad) 需要约 3.14 秒
     float vyaw = is_left ? 0.5f : -0.5f;
-    int duration_microseconds = 3141592; // 3.14 秒 (微秒单位)
-
-    std::cout << "[RobotDriver] 执行原地自转 90 度，方向: " << (is_left ? "左" : "右") << std::endl;
+    float total_duration = 3.14159f; // 总旋转时间（秒）
+    float hz = 50.0f;               // 刷新频率：50Hz (即每 20ms 下发一次指令)
     
-    // 下发纯角速度指令
-    this->move(0.0f, 0.0f, vyaw);
+    int total_steps = static_cast<int>(total_duration * hz);
+    int step_us = static_cast<int>(1000000.0f / hz); // 每一步阻塞的微秒数 (20000us)
 
-    // 阻塞等待转弯动作进行
-    usleep(duration_microseconds);
+    std::cout << "[RobotDriver] 正在通过循环刷新模式执行原地 90 度自转，方向: " << (is_left ? "左" : "右") << std::endl;
+    
+    // 使用循环不断下发 Move 指令以维持底层“心跳”
+    for (int i = 0; i < total_steps; ++i) {
+        this->move(0.0f, 0.0f, vyaw);
+        usleep(step_us); 
+    }
 
-    // 时间一到，强制截断角速度，精确定位
+    // 时间一到，强制截断角速度，精确定位防过冲
     this->move(0.0f, 0.0f, 0.0f);
-    std::cout << "[RobotDriver] 自转完成，已锁死底盘。" << std::endl;
+    std::cout << "[RobotDriver] 90 度自转循环结束，底盘已锁死。" << std::endl;
 }
 
 void RobotDriver::playSpecialAction(const std::string& action_type) {
