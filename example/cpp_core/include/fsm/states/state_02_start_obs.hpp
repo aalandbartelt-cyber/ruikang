@@ -8,20 +8,18 @@ namespace ruikang {
 namespace fsm {
 
 class State02StartObs : public StateBase {
-private:
-    // 之前用于跳跃逻辑的状态变量（目前闭环寻迹中设为 false）
-    bool is_jumping_;
-    std::chrono::time_point<std::chrono::steady_clock> action_start_time_;
-    
-    // 🌟🌟🌟 【核心状态变量】 🌟🌟🌟
-    // 用于记录底盘当前的前向速度，实现丝滑的软起动（Ramp-up）和弯道动态加减速
-    float current_vx_; 
-
 public:
-    // 状态机的标准生命周期函数
     void enter(StateMachine* sm) override;
     void execute(StateMachine* sm) override;
     void exit(StateMachine* sm) override;
+
+private:
+    bool is_jumping_ = false;
+    float current_vx_ = 0.0f;
+    int obs_confirm_count_ = 0; 
+    
+    // 🌟 核心：起步保护期倒计时器
+    int startup_ignore_ticks_ = 0; 
 };
 
 } // namespace fsm

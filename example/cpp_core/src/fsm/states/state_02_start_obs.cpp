@@ -1,62 +1,105 @@
 #include "fsm/states/state_02_start_obs.hpp"
+#include "fsm/states/state_03_avoidance.hpp" 
 #include "fsm/state_machine.hpp"
 #include <iostream>
 #include <cmath>
+#include <unistd.h>
 
 namespace ruikang {
 namespace fsm {
 
 void State02StartObs::enter(StateMachine* sm) {
-    std::cout << "[FSM] Enter STATE_02_START_OBS: 条件积分纯转头 + 动态控速" << std::endl;
+    std::cout << "[FSM] >>> 进入 STATE_02: 寻迹 + 跨栏监测" << std::endl;
     is_jumping_ = false;
+    current_vx_ = 0.0f;
+    obs_confirm_count_ = 0; 
+    startup_ignore_ticks_ = 150; // 1.5秒起步保护期
     sm->vel_ctrl.reset(); 
-    current_vx_ = 0.0f; 
 }
 
 void State02StartObs::execute(StateMachine* sm) {
-    if (!is_jumping_) {
-        // 🌟 获取视觉偏移量
-        float offset = sm->vision_data.line_offset;
+    if (is_jumping_) return;
+
+    float offset = sm->vision_data.line_offset;
+    float obs_dist = sm->vision_data.obstacle_distance;
+
+    // ==========================================
+    // 🌟 0. 物理预热保护期 
+    // ==========================================
+    if (startup_ignore_ticks_ > 0) {
+        startup_ignore_ticks_--;
+        obs_confirm_count_ = 0; 
         
-        // 🌟🌟🌟 修复点：在这里把雷达距离提取出来！ 🌟🌟🌟
-        float obs_dist = sm->vision_data.obstacle_distance;
-
-        // 🌟 弯道动态减速（维持 0.18 底线防僵死）
-        float target_vx = 0.22f; 
-        if (std::abs(offset) > 80.0f) {
-            target_vx = 0.18f; 
+        if (startup_ignore_ticks_ == 0) {
+            std::cout << "[FSM] 🛡️ 1.5秒起步保护期结束，跨栏监测正式激活！" << std::endl;
         }
-
-        // 🌟 解决 Vx 触电抖动
-        if (current_vx_ < target_vx - 0.006f) {
-            current_vx_ += 0.005f; 
-        } else if (current_vx_ > target_vx + 0.016f) {
-            current_vx_ -= 0.015f; 
+    } 
+    // ==========================================
+    // 🌟 1. 终极物理修复：精准架设黄金捕获网
+    // ==========================================
+    else {
+        // 核心修改：无视 0.20m 以下的所有地面底噪！
+        // 只捕捉 0.20m ~ 0.35m 这个没有任何干扰的黄金起跳区！
+        if (obs_dist >= 0.10f && obs_dist < 0.30f) {
+            obs_confirm_count_++; 
         } else {
-            current_vx_ = target_vx; 
+            obs_confirm_count_ = 0; 
         }
 
-        // 获取纯转头速度
-        float vyaw = sm->vel_ctrl.computeYaw(offset); 
+        // 3 帧确信起跳
+        if (obs_confirm_count_ >= 3) {
+            std::cout << "[FSM] !!! 连续 3 帧锁定目标 (0.20~0.35m), 紧急制动起跳 !!!" << std::endl;
+            is_jumping_ = true;
 
-        // 🚨 极限防反向校验（狗如果往黑线外跑，解开下面这行的注释）
-        // vyaw = -vyaw;
-
-        // 起步抑制 (仅在直道起步阶段生效)
-        if (current_vx_ < 0.15f && std::abs(offset) < 80.0f) {
-            vyaw *= 0.5f; 
+            if (sm->robot_driver) {
+                sm->robot_driver->move(0.0f, 0.0f, 0.0f);
+                std::cout << "[FSM] 正在刹车，等待底盘绝对静止..." << std::endl;
+                
+                usleep(1500000); // 1.5秒抱死刹车
+                
+                std::cout << "[FSM] 底盘锁定，ACTION: JUMP!" << std::endl;
+                sm->robot_driver->jump();
+                
+                sleep(3); // 落地缓冲
+                
+                sm->changeState(new State03Avoidance());
+                return;
+            }
         }
+    }
 
-        // 🌟 现在这里打印 obs_dist 就绝对不会报错了！
-        std::cout << "Vx: " << current_vx_ 
-                  << " | Offset: " << offset 
-                  << " | Vyaw: " << vyaw 
-                  << " | Radar_Dist: " << obs_dist << "m" << std::endl;
+    // ==========================================
+    // 2. 正常寻迹与速度控制
+    // ==========================================
+    float target_vx = 0.22f; 
+    if (std::abs(offset) > 80.0f) {
+        target_vx = 0.18f; 
+    }
 
-        if (sm->robot_driver) {
-            // 🌟 彻底抛弃 vy，中间项固定为 0.0f
-            sm->robot_driver->move(current_vx_, 0.0f, vyaw);
-        }
+    if (current_vx_ < target_vx - 0.006f) {
+        current_vx_ += 0.005f; 
+    } else if (current_vx_ > target_vx + 0.016f) {
+        current_vx_ -= 0.015f; 
+    } else {
+        current_vx_ = target_vx; 
+    }
+
+    float vyaw = sm->vel_ctrl.computeYaw(offset); 
+    if (current_vx_ < 0.15f && std::abs(offset) < 80.0f) {
+        vyaw *= 0.5f; 
+    }
+
+    // 🌟 动态日志：只要看到障碍物（计数器>0），强制逐帧打印！
+    static int print_count = 0;
+    if (obs_confirm_count_ > 0 || print_count++ % 10 == 0) {
+        std::cout << "Vx: " << current_vx_ << " | Offset: " << offset 
+                  << " | Vyaw: " << vyaw << " | Radar: " << obs_dist << "m" 
+                  << (startup_ignore_ticks_ > 0 ? " [保护期屏蔽中]" : " | Confirm: " + std::to_string(obs_confirm_count_) + "/3") 
+                  << std::endl;
+    }
+
+    if (sm->robot_driver) {
+        sm->robot_driver->move(current_vx_, 0.0f, vyaw);
     }
 }
 

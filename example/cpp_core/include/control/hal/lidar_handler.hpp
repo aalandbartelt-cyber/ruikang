@@ -3,8 +3,8 @@
 
 #include <mutex>
 #include <memory>
+#include <deque> // 🌟 引入双端队列，用于滤波
 #include <unitree/robot/channel/channel_subscriber.hpp>
-// 🌟 更改为订阅 PointStamped 消息类型，这是宇树雷达官方避障数据的类型
 #include <unitree/idl/ros2/PointStamped_.hpp>
 
 namespace ruikang {
@@ -24,7 +24,9 @@ private:
     std::mutex data_mutex_;
     float front_min_dist_;
     
-    // 🌟 更改智能指针的模板参数为 PointStamped_
+    // 🌟 滤波专用缓冲池
+    std::deque<float> dist_buffer_; 
+
     std::shared_ptr<unitree::robot::ChannelSubscriber<geometry_msgs::msg::dds_::PointStamped_>> sub_;
 };
 
