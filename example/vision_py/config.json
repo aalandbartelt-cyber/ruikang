@@ -1,7 +1,7 @@
 {
-    "camera_id_backup": "v4l2src device=/dev/video2 ! decodebin ! videoconvert ! video/x-raw, format=BGR ! appsink drop=1",
-    "camera_id": 0,
-    "video_path": "test_video.mp4",
+    "track_camera_id": 0,
+    "front_camera_id": 0,  
+    "front_camera_id_backup": "v4l2src device=/dev/video2 ! decodebin ! videoconvert ! video/x-raw, format=BGR ! appsink drop=1",
     "use_local_video": false,
     "udp_ip": "127.0.0.1",
     "udp_port": 8080,

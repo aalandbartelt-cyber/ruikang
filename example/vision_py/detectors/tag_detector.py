@@ -3,46 +3,66 @@ import cv2
 import cv2.aruco as aruco
 import numpy as np
 
-# 🌟 初始化只需做一次，放在外面可以大幅提升帧率！
+# 🌟 初始化
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
 parameters = aruco.DetectorParameters()
 detector = aruco.ArucoDetector(aruco_dict, parameters)
 
 def process_tag(frame):
-    """
-    接收一帧画面，返回识别到的标签/站点ID，以及标注后的画面
-    """
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # --- A. 图像标准化 (对抗光线) ---
+    # 使用自适应均衡化，把太亮或太暗的地方拉回到正常水平
+    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl, a, b))
+    frame_enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    
+    gray = cv2.cvtColor(frame_enhanced, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(frame_enhanced, cv2.COLOR_BGR2HSV)
     tag_result = "NONE"
 
-    # 1. ArUco 标签检测
+    # --- B. ArUco 码检测 ---
     corners, ids, _ = detector.detectMarkers(gray)
     if ids is not None:
         aruco.drawDetectedMarkers(frame, corners, ids)
         for marker_id in ids.flatten():
-            # 你可以随时在这里加上 3 号
             if marker_id in [1, 2, 3]: 
                 tag_result = f"ARUCO_{marker_id}"
 
-    # 2. 红色 C 标志检测
-    lower_red1, upper_red1 = np.array([0, 120, 70]), np.array([10, 255, 255])
-    lower_red2, upper_red2 = np.array([170, 120, 70]), np.array([180, 255, 255])
+    # --- C. 红色 C 标志检测 (抗干扰重构) ---
+    lower_red1, upper_red1 = np.array([0, 110, 50]), np.array([10, 255, 255])
+    lower_red2, upper_red2 = np.array([160, 110, 50]), np.array([180, 255, 255])
     mask_red = cv2.bitwise_or(cv2.inRange(hsv, lower_red1, upper_red1), 
                               cv2.inRange(hsv, lower_red2, upper_red2))
     
+    # 【核心加固】闭运算：把摄像头噪点造成的红圈裂缝“焊”上
+    kernel = np.ones((5,5), np.uint8)
+    mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_CLOSE, kernel)
+    
     contours_r, _ = cv2.findContours(mask_red, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     for cnt in contours_r:
         area = cv2.contourArea(cnt)
-        if area > 1500:
+        if area > 1000:
+            # 计算圆度：4*pi*A/P^2
+            perimeter = cv2.arcLength(cnt, True)
+            if perimeter == 0: continue
+            circularity = 4 * np.pi * (area / (perimeter * perimeter))
+            
+            # 【降压判定】只要圆度大于 0.4 且外接圆比例达标，就认为是标志
             (cx, cy), radius = cv2.minEnclosingCircle(cnt)
-            if area / (np.pi * (radius ** 2)) > 0.70:
-                r_crop = int(radius * 0.75)
+            rect_ratio = area / (np.pi * (radius ** 2))
+            
+            if circularity > 0.4 or rect_ratio > 0.5:
+                r_crop = int(radius * 0.7)
                 y1, y2 = int(cy - r_crop), int(cy + r_crop)
                 x1, x2 = int(cx - r_crop), int(cx + r_crop)
+                
                 if y1<0 or y2>frame.shape[0] or x1<0 or x2>frame.shape[1]: continue
                 
                 roi_gray = gray[y1:y2, x1:x2]
+                # 使用大津法自动找二值化阈值，无视光线
                 _, roi_bin = cv2.threshold(roi_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
                 
                 if roi_bin.size > 0:
@@ -53,11 +73,10 @@ def process_tag(frame):
                     
                     ink_pixels = cv2.countNonZero(clean_pattern)
                     total_circle_pixels = np.pi * ((w_roi/2)**2)
-                    if total_circle_pixels == 0: continue
-                    ink_ratio = ink_pixels / float(total_circle_pixels)
+                    ink_ratio = ink_pixels / float(total_circle_pixels) if total_circle_pixels > 0 else 0
                     
-                    # 墨量判定
-                    if ink_ratio > 0.40:
+                    # 墨量判定：保持你原本的逻辑
+                    if ink_ratio > 0.42: # 略微调高一点点，防止黑圈误判为白圈
                         tag_result = "C_MARK_WHITE_OUTER"
                         color = (0, 255, 0)
                     else:
@@ -75,7 +94,8 @@ if __name__ == "__main__":
     while True:
         ret, frame = cap.read()
         if not ret: break
-        frame = cv2.flip(frame, 1)
         res, frame = process_tag(frame)
-        cv2.imshow("Tag Test", frame)
+        cv2.imshow("Tag Robust System", frame)
         if cv2.waitKey(1) == ord('q'): break
+    cap.release()
+    cv2.destroyAllWindows()
