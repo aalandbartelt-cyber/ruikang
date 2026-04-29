@@ -3,7 +3,8 @@ import cv2
 import json
 import os
 import numpy as np
-import time # 用于计算帧率
+import time
+from collections import deque, Counter  # 用于防抖过滤的超级神器
 
 # 引入你的三大视觉模块
 from detectors.line_tracker import find_line_offset
@@ -12,7 +13,7 @@ from detectors.tag_detector import process_tag
 from communication.udp_sender import UDPSender
 
 def main():
-    print("🚀 正在启动 main_vision.py (全能视觉总控版)...")
+    print("🚀 正在启动 main_vision.py (工业级防抖总控版 - 明显肉眼可见延迟版)...")
 
     # 1. 加载配置
     current_path = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +37,9 @@ def main():
     udp_ip = config.get("udp_ip", "127.0.0.1")
     udp_port = config.get("udp_port", 8080)
 
+    # 临时强改：无视 config.json，强制用电脑摄像头进行本地调试
+    # source = 0 
+
     # 3. 启动视觉 UDP 发送器
     try:
         sender = UDPSender(ip=udp_ip, port=udp_port)
@@ -56,9 +60,34 @@ def main():
         print("❌ 错误：无法打开视频源！")
         return
 
-    print("--- 👁️ 视觉总控已启动！寻迹与地标检测并行中！按 'Ctrl + C' 或 'q' 退出 ---")
+    print("--- 👁️ 视觉总控已启动！防抖机制已部署！按 'Ctrl + C' 或 'q' 退出 ---")
 
     prev_time = 0
+
+    # ==========================================
+    # 🛡️ 核心：防抖窗口初始化 (加大容量，肉眼可见的延迟！)
+    # ==========================================
+    WINDOW_SIZE = 15 # 扩大到 15 帧的记忆容量
+    sign_history = deque(maxlen=WINDOW_SIZE)
+    tag_history = deque(maxlen=WINDOW_SIZE)
+
+    def get_stable_result(history_queue, current_raw_result):
+        """
+        滑动窗口投票器：计算最近 N 帧里的绝对多数
+        """
+        history_queue.append(current_raw_result)
+        
+        # 统计最近几帧里，各个结果出现的次数
+        vote_counts = Counter(history_queue)
+        
+        # 选出得票最高的那一个
+        top_item, top_votes = vote_counts.most_common(1)[0]
+        
+        # 必须在 15 帧里拿到 10 票（绝对多数），才算真正稳定！
+        if top_votes >= 10:
+            return top_item
+        else:
+            return "NONE"
 
     try:
         while True:
@@ -66,55 +95,50 @@ def main():
             if not ret: 
                 print("⌛ 等待画面中或视频已结束...")
                 break
-                
-            # 实车部署时如果画面方向正确，请注释掉翻转
-            # frame = cv2.flip(frame, 1)
 
             # ==========================================
-            # 🟢 视觉流水线 (防污染重构版)
+            # 🟢 1. 视觉流水线 (获取原始波动数据)
             # ==========================================
-            
-            # 🛡️ 1. 寻迹模块：务必加上 .copy()！
-            # 这样就算寻迹模块把画面切碎、缩小，也不会影响后续的识别
+            # 寻迹模块：传替身，防污染
             offset = find_line_offset(frame.copy(), threshold=line_threshold)
             
-            # 🔄 2. 调换顺序：让 Tag (红圈标志) 先执行！
-            # 此时画面最干净，没有别人画的红色线条干扰它的红色遮罩
-            tag_result, frame = process_tag(frame)
+            # Tag 检测 (ArUco / C标志) -> 先执行，画面最干净
+            raw_tag, frame = process_tag(frame)
             
-            # 🔄 3. 最后执行 Sign (黄三角警示牌)！
-            # 因为它只找黄色，Tag 刚才就算在画面上画了红圈和绿圈，也完全干扰不到它
-            sign_result, frame = process_sign(frame)
+            # Sign 检测 (警示牌) -> 后执行，不受红色圈圈干扰
+            raw_sign, frame = process_sign(frame)
             
             # ==========================================
+            # 🛡️ 2. 启动防抖过滤！(洗掉跳变数据)
             # ==========================================
-            # 🔵 数据打包与发送 (UDP 状态机)
+            stable_tag = get_stable_result(tag_history, raw_tag)
+            stable_sign = get_stable_result(sign_history, raw_sign)
+
+            # ==========================================
+            # 🔵 3. 数据打包与发送 (只发稳定的数据)
             # ==========================================
             if offset is not None:
-                # 判断是否扫到了真正的 ArUco (如果 tag_result 包含 "ARUCO" 字样)
-                is_aruco = "ARUCO" in tag_result
+                is_aruco = "ARUCO" in stable_tag
 
                 payload = {
                     "line_offset": float(offset),
-                    "warning_sign": sign_result,     # 可能是 "FIRE", "ELECTRIC", "RADIATION", "NONE"
-                    "platform_tag": tag_result,      # 可能是 "ARUCO_1", "WHITE-OUTER", "NONE" 等
-                    "aruco_detected": is_aruco       # True 或 False
+                    "warning_sign": stable_sign,     # 过滤后的稳定标志
+                    "platform_tag": stable_tag,      # 过滤后的稳定 Tag
+                    "aruco_detected": is_aruco
                 }
                 sender.send_data(payload)
-            else:
-                # 找不到线时，为了安全，可以发送一个默认包或者静默
-                pass
                 
             # ==========================================
-            # 🟣 联调显示与帧率计算
+            # 🟣 4. 联调显示与帧率计算
             # ==========================================
             curr_time = time.time()
             fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
             prev_time = curr_time
             
-            # 在画面上打印总控状态，方便你一次性看到所有结果
-            info_text = f"FPS:{int(fps)} | Offset:{offset if offset else 'N/A'} | Sign:{sign_result} | Tag:{tag_result}"
-            cv2.putText(frame, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            # 屏幕上同时显示 [原始数据] 和 [防抖后数据]
+            cv2.putText(frame, f"FPS:{int(fps)} | Offset:{offset if offset else 'N/A'}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            cv2.putText(frame, f"Raw Tag: {raw_tag} -> STABLE: {stable_tag}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2)
+            cv2.putText(frame, f"Raw Sign: {raw_sign} -> STABLE: {stable_sign}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 255, 255), 2)
             
             cv2.imshow("Main Vision Pipeline", frame)
             
