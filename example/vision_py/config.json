@@ -1,5 +1,6 @@
 {
-    "camera_id": "v4l2src device=/dev/video2 ! decodebin ! videoconvert ! video/x-raw, format=BGR ! appsink drop=1",
+    "camera_id_backup": "v4l2src device=/dev/video2 ! decodebin ! videoconvert ! video/x-raw, format=BGR ! appsink drop=1",
+    "camera_id": 0,
     "video_path": "test_video.mp4",
     "use_local_video": false,
     "udp_ip": "127.0.0.1",
