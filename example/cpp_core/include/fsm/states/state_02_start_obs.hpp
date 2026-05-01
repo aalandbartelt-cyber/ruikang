@@ -14,12 +14,25 @@ public:
     void exit(StateMachine* sm) override;
 
 private:
-    bool is_jumping_ = false;
-    float current_vx_ = 0.0f;
-    int obs_confirm_count_ = 0; 
+    // ===== 阶段标志 =====
+    bool is_jumping_           = false;   // 跳跃执行中（阻塞 execute）
+    bool post_jump_following_  = false;   // 跳跃完成后，进入寻迹收尾
     
-    // 🌟 核心：起步保护期倒计时器
-    int startup_ignore_ticks_ = 0; 
+    // ===== 寻迹速度 =====
+    float current_vx_ = 0.0f;
+    
+    // ===== 里程触发核心 =====
+    int   accel_ignore_ticks_ = 0;
+    bool  cruise_mode_        = false;
+    float traveled_dist_      = 0.0f;
+    std::chrono::steady_clock::time_point last_tick_;
+    
+    // ===== 跳跃后寻迹收尾 =====
+    int post_jump_total_ticks_ = 0;   // 跳跃后已经过的总 ticks
+    int no_line_ticks_         = 0;   // 连续无线计数
+    
+    // ===== 调试 =====
+    int log_tick_ = 0;
 };
 
 } // namespace fsm

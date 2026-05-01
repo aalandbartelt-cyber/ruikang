@@ -1,65 +1,123 @@
-//state_03_avoidance.cpp
+// src/fsm/states/state_03_avoidance.cpp
+// V3.0：禁用侧墙警戒（噪声大），只用前方距离触发
+//
 #include "fsm/states/state_03_avoidance.hpp"
 #include "fsm/state_machine.hpp"
+#include "common/config.hpp"
 #include <iostream>
-#include <unistd.h>
+#include <cmath>
 
 namespace ruikang {
 namespace fsm {
 
 void State03Avoidance::enter(StateMachine* sm) {
-    std::cout << "[FSM] >>> 进入 STATE_03: 迷宫避障模式 (Avoidance)" << std::endl;
-    turn_count_ = 0;
-    is_turning_ = false;
+    std::cout << "\n[FSM] >>> 进入 STATE_03: 避障区（5 次转弯）" << std::endl;
+    std::cout << "[FSM] 转弯顺序: ";
+    for (int i = 0; i < config::s03::TOTAL_TURNS; ++i) {
+        std::cout << (config::s03::TURN_DIRECTIONS[i] ? "左 " : "右 ");
+    }
+    std::cout << std::endl;
+    
+    phase_           = Phase::FORWARD;
+    turn_count_      = 0;
+    accumulated_yaw_ = 0.0f;
+    log_tick_        = 0;
+    phase_start_     = std::chrono::steady_clock::now();
 }
 
 void State03Avoidance::execute(StateMachine* sm) {
-    // 🌟 如果正在转弯，直接跳过雷达判定，专心把弯转完！
-    if (is_turning_) return; 
+    if (!sm->lidar_handler || !sm->robot_driver) return;
+    
+    auto now = std::chrono::steady_clock::now();
+    float wall_dist = sm->lidar_handler->get_front_wall_distance();
 
-    float obs_dist = sm->vision_data.obstacle_distance;
-
-    // 🌟 1. 遇到死胡同判断 (距离小于 0.45 米，且大于 0.1 米防底噪误触)
-    if (obs_dist > 0.1f && obs_dist <= 0.45f) {
-        is_turning_ = true; // 上锁
-        turn_count_++;
+    // ===== 子阶段 1：直行 =====
+    if (phase_ == Phase::FORWARD) {
+        // 完成 5 次转弯就退出
+        if (turn_count_ >= config::s03::TOTAL_TURNS) {
+            std::cout << "[迷宫] 🎉 完成 " << config::s03::TOTAL_TURNS 
+                      << " 次转弯，退出 State03" << std::endl;
+            phase_ = Phase::FINISHED;
+            sm->robot_driver->move(0, 0, 0);
+            return;
+        }
         
-        std::cout << "[迷宫逻辑] 🛑 遇墙！前方距离: " << obs_dist 
-                  << "m, 准备执行第 " << turn_count_ << " 次 90度原地转弯" << std::endl;
-
-        if (sm->robot_driver) {
-            // 步骤 A: 发现墙壁，瞬间刹车，防止撞墙
-            sm->robot_driver->move(0.0f, 0.0f, 0.0f); 
-            usleep(300000); // 停稳 0.3秒，防止带惯性漂移导致转角不准
-
-            // 步骤 B: 根据计数器决定左转还是右转
-            // 默认逻辑：奇数次左转，偶数次右转。（具体根据你们赛道的 U型 或 Z型 走法调整！）
-            bool turn_left = (turn_count_ % 2 != 0); 
+        // 检查前方挡板
+        if (wall_dist > 0.10f && wall_dist <= config::s03::TURN_TRIGGER_DIST) {
+            current_turn_left_ = config::s03::TURN_DIRECTIONS[turn_count_];
+            std::cout << "[迷宫] 🛑 第 " << (turn_count_ + 1) 
+                      << "/" << config::s03::TOTAL_TURNS 
+                      << " 次转弯触发，方向: " 
+                      << (current_turn_left_ ? "左" : "右")
+                      << "，前墙: " << wall_dist << "m" << std::endl;
             
-            // 步骤 C: 🌟 调用 X 同学写的底层原地 90度 转向函数
-            // 注意：这个函数内部必须是“阻塞的”（转完90度才 return）
-            sm->robot_driver->turn90Degree(turn_left); 
-
-            // 步骤 D: 转弯完成后，稍微停顿一下，让雷达重新扫描前方新视野
-            usleep(200000); 
+            phase_           = Phase::TURNING;
+            accumulated_yaw_ = 0.0f;
+            phase_start_     = now;
+            sm->robot_driver->move(0, 0, 0);
+            return;
         }
         
-        is_turning_ = false; // 解锁，恢复直线探测模式
-    } 
-    // 🌟 2. 前方开阔，稳步推进
-    else {
-        if (sm->robot_driver) {
-            // 迷宫里不能走太快，给雷达留反应时间，0.15m/s 是一个很稳健的速度
-            sm->robot_driver->move(0.15f, 0.0f, 0.0f);
+        // 直行（侧墙警戒已禁用）
+        sm->robot_driver->move(config::s03::CRUISE_VX, 0, 0);
+        
+        if (config::debug::VERBOSE_LOG && (++log_tick_ % 50 == 0)) {
+            std::cout << "[迷宫][直行] front=" << wall_dist 
+                      << "m (" << turn_count_ << "/" 
+                      << config::s03::TOTAL_TURNS << " done)" << std::endl;
         }
+        return;
+    }
+    
+    // ===== 子阶段 2：阿克曼转弯 =====
+    if (phase_ == Phase::TURNING) {
+        float dt = std::chrono::duration<float>(now - phase_start_).count();
+        accumulated_yaw_ = dt * config::s03::TURN_VYAW;
+        
+        if (accumulated_yaw_ >= config::s03::TURN_TARGET) {
+            std::cout << "[迷宫] ✅ 第 " << (turn_count_ + 1) 
+                      << " 次转弯完成 (耗时 " << dt << "s)" << std::endl;
+            sm->robot_driver->move(0, 0, 0);
+            turn_count_++;
+            phase_       = Phase::STABILIZING;
+            phase_start_ = now;
+            return;
+        }
+        
+        float vyaw = config::s03::TURN_VYAW * (current_turn_left_ ? 1.0f : -1.0f);
+        sm->robot_driver->move(config::s03::TURN_VX, 0, vyaw);
+        
+        if (++log_tick_ % 30 == 0) {
+            std::cout << "[迷宫][转弯] yaw=" 
+                      << (accumulated_yaw_ * 180.0f / 3.14159f) 
+                      << "° / 90°" << std::endl;
+        }
+        return;
+    }
+    
+    // ===== 子阶段 3：稳定 =====
+    if (phase_ == Phase::STABILIZING) {
+        float dt = std::chrono::duration<float>(now - phase_start_).count();
+        if (dt >= config::s03::STABILIZE_AFTER_TURN) {
+            std::cout << "[迷宫] ▶️ 稳定完成，继续直行" << std::endl;
+            phase_       = Phase::FORWARD;
+            phase_start_ = now;
+            log_tick_    = 0;
+        } else {
+            sm->robot_driver->move(0, 0, 0);
+        }
+        return;
+    }
+    
+    // ===== 子阶段 4：完成 =====
+    if (phase_ == Phase::FINISHED) {
+        sm->robot_driver->move(0, 0, 0);
     }
 }
 
 void State03Avoidance::exit(StateMachine* sm) {
-    std::cout << "[FSM] <<< 退出 STATE_03 (Avoidance)" << std::endl;
-    if (sm->robot_driver) {
-        sm->robot_driver->move(0.0f, 0.0f, 0.0f); // 确保退出状态时安全停下
-    }
+    if (sm->robot_driver) sm->robot_driver->move(0, 0, 0);
+    std::cout << "[FSM] <<< 退出 STATE_03" << std::endl;
 }
 
 } // namespace fsm
