@@ -1,9 +1,8 @@
 {
-    "track_camera_id": 0,
-    "front_camera_id": 0,  
-    "front_camera_id_backup": "v4l2src device=/dev/video2 ! decodebin ! videoconvert ! video/x-raw, format=BGR ! appsink drop=1",
-    "use_local_video": false,
     "udp_ip": "127.0.0.1",
     "udp_port": 8080,
-    "black_line_threshold": 60
+    "black_line_threshold": 60,
+    "enable_go2_cam": true,
+    "front_camera_id": null,
+    "_注释": "front_camera_id 设为 Go2 自带摄像头的 v4l2 路径或 ID。如果暂时没接，设为 null，警示牌识别会被自动禁用，不影响避障"
 }

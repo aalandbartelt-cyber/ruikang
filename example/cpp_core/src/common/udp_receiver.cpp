@@ -60,25 +60,39 @@ void UdpReceiver::receiveLoop() {
     while (running_) {
         int n = recvfrom(sockfd_, (char *)buffer, 1024, MSG_DONTWAIT, NULL, NULL);
         if (n > 0) {
-            buffer[n] = '\0'; 
-            
+            buffer[n] = '\0';
+
             try {
-                // 1. 解析 JSON
                 json j = json::parse(buffer);
-                
-                // 2. 加锁更新内存
+
                 std::lock_guard<std::mutex> lock(data_mutex_);
-                
-                // 🌟 纯视觉数据解析 (已彻底删除雷达相关的解析，为 CPU 减负)
-                if (j.contains("line_offset")) latest_data_.line_offset = j["line_offset"].get<float>();
-                if (j.contains("platform_tag")) latest_data_.platform_tag = j["platform_tag"].get<int>();
-                if (j.contains("warning_sign")) latest_data_.warning_sign = j["warning_sign"].get<std::string>();
-                if (j.contains("aruco_detected")) latest_data_.aruco_detected = j["aruco_detected"].get<bool>();
-                
+
+                // 视觉
+                if (j.contains("line_offset"))
+                    latest_data_.line_offset = j["line_offset"].get<float>();
+                if (j.contains("platform_tag")) {
+                    // platform_tag 可能是 int 也可能是 str（兼容）
+                    auto& v = j["platform_tag"];
+                    if (v.is_number())
+                        latest_data_.platform_tag = v.get<int>();
+                }
+                if (j.contains("warning_sign"))
+                    latest_data_.warning_sign = j["warning_sign"].get<std::string>();
+                if (j.contains("aruco_detected"))
+                    latest_data_.aruco_detected = j["aruco_detected"].get<bool>();
+
+                // ★ 深度相机字段（方案三 V2）
+                if (j.contains("depth_front"))
+                    latest_data_.depth_front = j["depth_front"].get<float>();
+                if (j.contains("depth_left"))
+                    latest_data_.depth_left  = j["depth_left"].get<float>();
+                if (j.contains("depth_right"))
+                    latest_data_.depth_right = j["depth_right"].get<float>();
+
             } catch (const json::parse_error& e) {
                 std::cerr << "[UDP] JSON Parse Error: " << e.what() << std::endl;
             }
         }
-        usleep(2000); // 歇 2 毫秒
+        usleep(2000);
     }
 }

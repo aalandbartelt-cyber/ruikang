@@ -4,7 +4,6 @@
 #define STATE_MACHINE_HPP
 
 #include "control/hal/robot_driver.hpp"
-#include "control/hal/lidar_handler.hpp"   // ← 新增
 #include "common/udp_receiver.hpp"
 #include "control/locomotion/velocity_ctrl.hpp"
 
@@ -16,7 +15,6 @@ class StateBase;
 class StateMachine {
 public:
     control::RobotDriver*  robot_driver;
-    control::LidarHandler* lidar_handler;  // ← 新增
     StateBase*             current_state;
     VisionData             vision_data;
     control::VelocityCtrl  vel_ctrl;
@@ -25,7 +23,7 @@ public:
     int memorized_tag = 0;
 
     StateMachine(control::RobotDriver* driver,
-                 control::LidarHandler* lidar,
+                 
                  StateBase* initial_state);
     ~StateMachine();
 

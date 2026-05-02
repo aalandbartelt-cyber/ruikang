@@ -1,13 +1,11 @@
 // src/fsm/states/state_02_start_obs.cpp
-// State02：纯里程触发跨栏 + 跳后寻迹收尾
+// State02：纯里程触发跨栏 + 跳后寻迹 2 秒 + 逆时针自转 5° 切出
 //
 // 时间线：
-//   1) enter           初始化里程累加器
+//   1) enter          初始化里程累加器
 //   2) 阶段A：里程累加  → traveled_dist_ ≥ D_JUMP_TRIGGER 触发跳跃
 //   3) 阶段B：跳跃执行  → 刹车 + jump() + 恢复
-//   4) 阶段C：跳后寻迹  → 满足下列任一条件后切 State03：
-//                        - 寻迹超过 POST_JUMP_MIN_TICKS 且连续 NO_LINE_TICKS_TO_EXIT 帧无线
-//                        - 总 ticks 超过 POST_JUMP_TIMEOUT_TICKS（兜底超时）
+//   4) 阶段C：跳后动作  → 寻迹 2 秒 (200 ticks) -> 原地逆时针转 5° (44 ticks) -> 切入 State03
 //
 #include "fsm/states/state_02_start_obs.hpp"
 #include "fsm/states/state_03_avoidance.hpp"
@@ -60,53 +58,46 @@ void State02StartObs::execute(StateMachine* sm) {
     if (is_jumping_) return;
     
     // ============================================================
-    // 阶段 C：跳跃完成后，继续寻迹直到出线 or 超时
+    // 阶段 C：跳跃完成后，固定寻迹 2 秒 -> 逆时针自转 5° -> 进 State03
     // ============================================================
     if (post_jump_following_) {
         post_jump_total_ticks_++;
-        float offset = sm->vision_data.line_offset;
         
-        // 出线判定：连续 N 帧 |offset| 异常
-        if (std::abs(offset) > config::s02::NO_LINE_OFFSET_THRESH) {
-            no_line_ticks_++;
-        } else {
-            no_line_ticks_ = 0;
+        const int TRACK_TICKS = 200; // 寻迹时长：200 帧 (2秒)
+        const int SPIN_TICKS  = 44;  // 自转时长：44 帧 (0.44秒，配合 0.2rad/s 刚好转 5°)
+        
+        // C.1 寻迹阶段 (0 ~ 2秒)
+        if (post_jump_total_ticks_ <= TRACK_TICKS) {
+            float offset = sm->vision_data.line_offset;
+            float vyaw = sm->vel_ctrl.computeYaw(offset);
+            
+            if (sm->robot_driver) {
+                sm->robot_driver->move(config::s02::CRUISE_VX, 0.0f, vyaw);
+            }
+            
+            if (config::debug::VERBOSE_LOG && (++log_tick_ % 50 == 0)) {
+                std::cout << "[跳后寻迹] total="
+                          << post_jump_total_ticks_ * 10 << "ms / 2000ms"
+                          << " offset=" << offset
+                          << std::endl;
+            }
         }
-        
-        // ----- 退出条件 1：满足"最小寻迹时长 + 连续无线" -----
-        bool min_time_passed = (post_jump_total_ticks_ >= config::s02::POST_JUMP_MIN_TICKS);
-        bool no_line_enough  = (no_line_ticks_ >= config::s02::NO_LINE_TICKS_TO_EXIT);
-        if (min_time_passed && no_line_enough) {
-            std::cout << "[FSM] ✅ 出线判定达成（已寻迹 "
-                      << post_jump_total_ticks_ * 10 << "ms，连续无线 "
-                      << no_line_ticks_ * 10 << "ms）→ 切 STATE_03" << std::endl;
+        // C.2 自转微调阶段 (2秒 ~ 2.44秒)
+        else if (post_jump_total_ticks_ <= TRACK_TICKS + SPIN_TICKS) {
+            if (post_jump_total_ticks_ == TRACK_TICKS + 1) {
+                std::cout << "[FSM] 🌀 寻迹完成，开始逆时针自转 5° (0.2rad/s, 0.44s)..." << std::endl;
+            }
+            
+            // 发送自转指令：vx=0, vy=0, vyaw=0.2f (正数代表逆时针)
+            if (sm->robot_driver) {
+                sm->robot_driver->move(0.0f, 0.0f, 0.2f);
+            }
+        }
+        // C.3 切换阶段
+        else {
+            std::cout << "[FSM] ✅ 5°微调完成，切入 STATE_03" << std::endl;
             sm->changeState(new State03Avoidance());
             return;
-        }
-        
-        // ----- 退出条件 2：兜底超时 -----
-        if (post_jump_total_ticks_ >= config::s02::POST_JUMP_TIMEOUT_TICKS) {
-            std::cout << "[FSM] ⚠️ 跳后寻迹超时（"
-                      << config::s02::POST_JUMP_TIMEOUT_TICKS * 10
-                      << "ms），强制切 STATE_03" << std::endl;
-            sm->changeState(new State03Avoidance());
-            return;
-        }
-        
-        // 正常寻迹（保持小速度匀速）
-        float vyaw = sm->vel_ctrl.computeYaw(offset);
-        if (sm->robot_driver) {
-            sm->robot_driver->move(config::s02::CRUISE_VX, 0.0f, vyaw);
-        }
-        
-        if (config::debug::VERBOSE_LOG && (++log_tick_ % 50 == 0)) {
-            std::cout << "[跳后寻迹] total="
-                      << post_jump_total_ticks_ * 10 << "ms"
-                      << " offset=" << offset
-                      << " no_line=" << no_line_ticks_
-                      << "/" << config::s02::NO_LINE_TICKS_TO_EXIT
-                      << " (min_pass=" << (min_time_passed ? "Y" : "N") << ")"
-                      << std::endl;
         }
         return;
     }
@@ -161,13 +152,11 @@ void State02StartObs::execute(StateMachine* sm) {
                 
                 usleep(static_cast<int>(config::s02::RECOVER_AFTER_JUMP * 1e6));
                 
-                // ★ 进入跳后寻迹阶段，不立刻切 State03
-                std::cout << "[FSM] ✅ 跨栏完成，进入跳后寻迹阶段（最小 "
-                          << config::s02::POST_JUMP_MIN_TICKS * 10 << "ms）" << std::endl;
+                // ★ 进入跳后寻迹阶段
+                std::cout << "[FSM] ✅ 跨栏完成，开始执行跳后寻迹（固定 2 秒）..." << std::endl;
                 post_jump_following_   = true;
                 is_jumping_            = false;
                 post_jump_total_ticks_ = 0;
-                no_line_ticks_         = 0;
                 log_tick_              = 0;
                 sm->vel_ctrl.reset();
                 return;

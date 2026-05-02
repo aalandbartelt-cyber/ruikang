@@ -6,10 +6,10 @@ namespace ruikang {
 namespace fsm {
 
 StateMachine::StateMachine(control::RobotDriver* driver,
-                           control::LidarHandler* lidar,
+                           
                            StateBase* initial_state)
     : robot_driver(driver),
-      lidar_handler(lidar),
+      
       current_state(nullptr) {
     if (initial_state) changeState(initial_state);
 }

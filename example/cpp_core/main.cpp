@@ -1,7 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include "control/hal/robot_driver.hpp"
-#include "control/hal/lidar_handler.hpp"
+
 #include "common/udp_receiver.hpp"
 #include "fsm/state_machine.hpp"
 #include "fsm/states/state_01_init.hpp"
@@ -23,15 +23,14 @@ int main() {
 
     // 3. 实例化驱动和雷达
     RobotDriver  driver;
-    LidarHandler lidar;
     
     driver.initConnection("eth0");
-    lidar.init();
+    //lidar.init();
 
     // 4. 状态机
-   // StateMachine brain(&driver, &lidar, new State01Init());
+    //StateMachine brain(&driver,  new State01Init());
    // ★★ 临时：跳过 State01/02，直接调试 State03 ★★
-    StateMachine brain(&driver, &lidar, new State03Avoidance());
+    StateMachine brain(&driver,  new State03Avoidance());
 
     std::cout << "--- FSM Main Loop Started ---" << std::endl;
 

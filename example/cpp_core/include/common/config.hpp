@@ -52,49 +52,59 @@ namespace s02 {
 }
 
 // =====================================================
-// State03: 避障区（点云 + 阿克曼转弯）
-// V5.0：基于 RViz 实测 + 真实通道场景调优
-// 实测：狗背 Z=+0.06，前方挡板 Z=+0.11
-//       右侧通道墙 Y=-1.06（说明侧墙也会被扫到，必须收紧 Y）
+// State03: 避障区（D435i 深度相机方案）
+// 物理基线：D435i 前倾约 45°
+//   - 无障碍：看到地面，距离 ≈ 0.66m
+//   - 有障碍：距离突然 < 0.50m
 // =====================================================
 namespace s03 {
     // ===== 直行参数 =====
     constexpr float CRUISE_VX = 0.12f;
     
-    // ===== 触发转弯的前方距离（米） =====
+    
+    // ===== 避障核心阈值 =====
     constexpr float TURN_TRIGGER_DIST = 0.40f;
-    
-    // ===== ★ 挡板高度范围 ★ =====
-    // 实测：狗背 Z=+0.06，挡板上端 Z 在 +0.10~+0.30 之间
-    constexpr float WALL_Z_MIN = +0.05f;   // 略高于狗背
-    constexpr float WALL_Z_MAX = +0.30f;   // 包含 45cm 挡板
-    
-    // ===== ★ 前方扫描的 Y 窄条（必须严格） ★ =====
-    // 通道宽 60cm，狗中心到墙 30cm
-    // 必须严格限制 Y_HALF ≤ 0.20，否则会扫到通道左右两侧的墙
-    constexpr float WALL_Y_HALF = 0.20f;
-    
-    // ===== ★ 挡板点数阈值（白色塑料板反射弱，不能设太高）★ =====
-    constexpr int WALL_POINT_THRESH = 3;
-    
+
+    // 连续帧数确认（防止单帧抖动误触）
+    constexpr int CONFIRM_FRAMES = 5;  // 5 帧 ≈ 50ms
+
     // ===== 阿克曼转弯参数 =====
     constexpr float TURN_VX     = 0.10f;
     constexpr float TURN_VYAW   = 0.60f;
-    constexpr float TURN_TARGET = 1.5708f;
-    
-    // ===== 5 次转弯方向（左左右右左） =====
-    constexpr bool TURN_DIRECTIONS[5] = {true, true, false, false, true};
-    constexpr int  TOTAL_TURNS = 5;
-    
-    // ===== 侧距参数（保留但 State03 暂不使用） =====
-    constexpr float SIDE_WARN_DIST = 0.12f;
-    constexpr float SIDE_X_MIN = 0.30f;
-    constexpr float SIDE_X_MAX = 0.70f;
-    constexpr float SIDE_Y_MIN = 0.30f;
-    constexpr float SIDE_Y_MAX = 0.50f;
-    
-    // ===== 转弯后稳定时间 =====
-    constexpr float STABILIZE_AFTER_TURN = 0.3f;
+    // ===== 8 次转弯的目标角度数组（弧度制） =====
+    constexpr float TURN_TARGETS[8] = {
+        1.5708f,  // 第 1 次：90度
+        1.5708f,  // 第 2 次：90度
+        0.8550f,   // 第 3 次：小于60度 (← 在这里把数值改小)
+        0.0800f,  // 第 4 次：小于7度  （修正偏角）
+        1.5708f,  // 第 5 次：90度
+        1.047f,  // 第 6 次：60度
+        0.7500f,  // 第 7 次：大于40度    (修正偏角)
+        1.5708f   // 第 8 次：90度
+    };
+
+    // ===== 8 次转弯方向（左左左左右右右左） =====
+    constexpr bool TURN_DIRECTIONS[8] = {true, true, true, true, false, false, false, true};
+    constexpr int  TOTAL_TURNS = 8;
+
+    // ===== 次转弯后的稳定/停顿缓冲时间（秒） =====
+    // 发送速度 0，让机器狗原地踏步恢复重心
+    constexpr float STABILIZE_TIMES[8] = {
+        0.3f,  // 第 1 次转完后
+        0.3f,  // 第 2 次转完后
+        0.4f,  // 第 3 次转完后
+        0.5f,  // 第 4 次转完后
+        0.4f,  // 第 5 次转完后：这里加长到 0.5 秒，强制恢复重心！
+        0.4f,  // 第 6 次转完后
+        0.4f,  // 第 7 次转完后
+        0.4f   // 第 8 次转完后
+    };
+
+    // ===== 数据有效性检查 =====
+    // 如果 depth_front < 0.10m，认为是数据异常（太近不可能），忽略这帧
+    constexpr float DEPTH_MIN_VALID = 0.10f;
+    // 如果 depth_front >= 9.0m，认为是 D435i 数据缺失，忽略
+    constexpr float DEPTH_MAX_VALID = 9.0f;
 }
 // =====================================================
 // State09: 终点跨栏（纯里程触发，参数与 State02 同结构）
