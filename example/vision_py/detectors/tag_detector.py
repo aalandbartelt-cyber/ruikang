@@ -27,7 +27,10 @@ def process_tag(frame):
     if ids is not None:
         aruco.drawDetectedMarkers(frame, corners, ids)
         for marker_id in ids.flatten():
-            if marker_id in [1, 2, 3]: 
+            # 👇 就是下面这一行！让它把看到的任何 ID 都强行打印在终端里！
+            print(f"🔥 发现隐藏 ArUco 码！它的真实 ID 是: {marker_id}")
+            
+            if marker_id in [1, 2, 3,16,17,30]: 
                 tag_result = f"ARUCO_{marker_id}"
 
     # --- C. 红色 C 标志检测 (抗干扰重构) ---
