@@ -3,10 +3,35 @@ import cv2
 import cv2.aruco as aruco
 import numpy as np
 
-# 🌟 初始化
-aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
-parameters = aruco.DetectorParameters()
-detector = aruco.ArucoDetector(aruco_dict, parameters)
+# =====================================================
+# 🔧 OpenCV 版本兼容层
+# - OpenCV 4.7+：新 API（ArucoDetector 类）
+# - OpenCV 4.5/4.6：老 API（DetectorParameters_create + detectMarkers）
+# =====================================================
+
+# 用 ArucoDetector 是否存在判断 API 风格
+_USE_NEW_API = hasattr(aruco, 'ArucoDetector')
+print(f"[tag_detector] OpenCV {cv2.__version__}, "
+      f"使用 {'新' if _USE_NEW_API else '老'} ArUco API")
+
+if _USE_NEW_API:
+    # ===== 新 API（4.7+）=====
+    aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+    parameters = aruco.DetectorParameters()
+    _detector = aruco.ArucoDetector(aruco_dict, parameters)
+    
+    def _detect(gray):
+        corners, ids, _ = _detector.detectMarkers(gray)
+        return corners, ids
+else:
+    # ===== 老 API（4.5/4.6）=====
+    aruco_dict = aruco.Dictionary_get(aruco.DICT_4X4_50)
+    parameters = aruco.DetectorParameters_create()
+    
+    def _detect(gray):
+        corners, ids, _ = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+        return corners, ids
+
 
 def process_tag(frame):
     # --- A. 图像标准化 (对抗光线) ---
@@ -22,15 +47,15 @@ def process_tag(frame):
     hsv = cv2.cvtColor(frame_enhanced, cv2.COLOR_BGR2HSV)
     tag_result = "NONE"
 
-    # --- B. ArUco 码检测 ---
-    corners, ids, _ = detector.detectMarkers(gray)
+    # --- B. ArUco 码检测（兼容老/新 API）---
+    corners, ids = _detect(gray)
     if ids is not None:
         aruco.drawDetectedMarkers(frame, corners, ids)
         for marker_id in ids.flatten():
             # 👇 就是下面这一行！让它把看到的任何 ID 都强行打印在终端里！
             print(f"🔥 发现隐藏 ArUco 码！它的真实 ID 是: {marker_id}")
             
-            if marker_id in [1, 2, 3,16,17,30]: 
+            if marker_id in [1, 2, 3, 16, 17, 30]: 
                 tag_result = f"ARUCO_{marker_id}"
 
     # --- C. 红色 C 标志检测 (抗干扰重构) ---
@@ -39,7 +64,7 @@ def process_tag(frame):
     mask_red = cv2.bitwise_or(cv2.inRange(hsv, lower_red1, upper_red1), 
                               cv2.inRange(hsv, lower_red2, upper_red2))
     
-    # 【核心加固】闭运算：把摄像头噪点造成的红圈裂缝“焊”上
+    # 【核心加固】闭运算：把摄像头噪点造成的红圈裂缝"焊"上
     kernel = np.ones((5,5), np.uint8)
     mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_CLOSE, kernel)
     
@@ -91,6 +116,7 @@ def process_tag(frame):
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
     return tag_result, frame
+
 
 if __name__ == "__main__":
     cap = cv2.VideoCapture(0)

@@ -154,27 +154,26 @@ def main():
             curr_time = time.time()
             fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
             prev_time = curr_time
-         
-            display_color = color_frame.copy()
-            cv2.putText(
-                display_color,
-                f"FPS:{int(fps)} Off:{offset} F:{depth_front:.2f} L:{depth_left:.2f} R:{depth_right:.2f}",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2
-            )
-            cv2.imshow("D435i Color (Tracking + Depth Status)", display_color)
 
-            if frame_front is not None:
-                cv2.putText(
-                    frame_front,
-                    f"Sign:{stable_sign} Tag:{stable_tag}",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 100, 255), 2
-                )
-                cv2.imshow("Go2 Front (Sign/Tag)", frame_front)
+           # display_color = color_frame.copy()
+           # cv2.putText(
+                #display_color,
+               # f"FPS:{int(fps)} Off:{offset} F:{depth_front:.2f} L:{depth_left:.2f} R:{depth_right:.2f}",
+               # (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2
+           # )
+           # cv2.imshow("D435i Color (Tracking + Depth Status)", display_color)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-           
-        
+           # if frame_front is not None:
+              #  cv2.putText(
+              #      frame_front,
+               #     f"Sign:{stable_sign} Tag:{stable_tag}",
+              #      (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 100, 255), 2
+              #  )
+              #  cv2.imshow("Go2 Front (Sign/Tag)", frame_front)
+
+           # if cv2.waitKey(1) & 0xFF == ord('q'):
+               # break 
+
     except KeyboardInterrupt:
         print("\n🛑 用户停止")
     finally:
