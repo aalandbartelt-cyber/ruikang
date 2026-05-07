@@ -99,7 +99,8 @@ def main():
                 color_frame = rs_handler.get_color_frame()
                 depth_front, depth_left, depth_right = rs_handler.get_obstacle_distances()
 
-            offset = find_line_offset(color_frame)
+            # 接收两个返回值：当前偏移量 和 弯道趋势
+            offset, trend = find_line_offset(color_frame, threshold=config.get("black_line_threshold", 60))
 
             # ========== B. 前置相机：警示牌与标识识别 ==========
             stable_sign = "NONE"
@@ -139,13 +140,13 @@ def main():
                     "warning_sign": stable_sign,
                     "platform_tag": platform_id,
                     "aruco_detected": "ARUCO" in stable_tag,
-                    "aruco_center_x": int(tag_cx),   # 强制转 int
-                    "aruco_center_y": int(tag_cy),   # 强制转 int
-                    "line_offset": int(offset) if offset is not None else 0,
+                    "aruco_center_x": int(tag_cx),
+                    "aruco_center_y": int(tag_cy),
+                    "line_offset": int(offset),
+                    "turn_trend": int(trend),  # 👈 新增：把预判趋势发给控制端
                     "depth_front": float(depth_front),
                     "depth_left": float(depth_left),
                     "depth_right": float(depth_right),
-                    "raw_tag_str": stable_tag
                 }
                 sender.send_data(payload)
                 

@@ -1,1 +1,4 @@
 # Python 依赖包清单 (opencv-python, numpy, pyserial等)
+opencv-contrib-python
+numpy
+pyrealsense2
