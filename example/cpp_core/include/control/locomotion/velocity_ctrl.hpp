@@ -5,6 +5,13 @@
 namespace ruikang {
 namespace control {
 
+// 统一输出给底层机器狗的速度结构体
+struct VelocityCmd {
+    float vx;
+    float vy;
+    float vyaw;
+};
+
 class VelocityCtrl {
 public:
     float Kp_yaw;
@@ -90,8 +97,21 @@ public:
 
         smoothed_vyaw = smoothed_vyaw + filter_alpha * (raw_vyaw - smoothed_vyaw);
 
-        return smoothed_vyaw; 
+        return smoothed_vyaw;
     }
+
+    // ==========================================
+    // 5.8 新增：供状态机直接调用的封装接口
+    // ==========================================
+
+    // 台阶专用：恒定低速前进，不转向，防跌落
+    VelocityCmd getStairClimbVelocity();
+
+    // 正常巡线：PID 偏航 + 动态线速度（弯道自动减速）
+    VelocityCmd getNormalTrackingVelocity(float current_offset, float base_vx = 0.12f);
+
+    // 紧急刹车
+    VelocityCmd getStopVelocity();
 };
 
 } 

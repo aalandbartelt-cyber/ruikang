@@ -80,6 +80,11 @@ void UdpReceiver::receiveLoop() {
                     latest_data_.warning_sign = j["warning_sign"].get<std::string>();
                 if (j.contains("aruco_detected"))
                     latest_data_.aruco_detected = j["aruco_detected"].get<bool>();
+                // ArUco 码中心坐标（State04 台阶对齐用，Y 发 JSON 时需同步加字段）
+                if (j.contains("aruco_center_x"))
+                    latest_data_.aruco_center_x = j["aruco_center_x"].get<float>();
+                if (j.contains("aruco_center_y"))
+                    latest_data_.aruco_center_y = j["aruco_center_y"].get<float>();
 
                 // ★ 深度相机字段（方案三 V2）
                 if (j.contains("depth_front"))
@@ -88,6 +93,12 @@ void UdpReceiver::receiveLoop() {
                     latest_data_.depth_left  = j["depth_left"].get<float>();
                 if (j.contains("depth_right"))
                     latest_data_.depth_right = j["depth_right"].get<float>();
+                if (j.contains("turn_trend"))
+                    latest_data_.turn_trend = j["turn_trend"].get<float>();
+                if (j.contains("red_dot_detected"))
+                    latest_data_.red_dot_detected = j["red_dot_detected"].get<bool>();
+                if (j.contains("red_dot_center_x"))
+                    latest_data_.red_dot_center_x = j["red_dot_center_x"].get<float>();
 
             } catch (const json::parse_error& e) {
                 std::cerr << "[UDP] JSON Parse Error: " << e.what() << std::endl;

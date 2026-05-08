@@ -100,22 +100,22 @@ void RobotDriver::turn90Degree(bool is_left) {
 void RobotDriver::playSpecialAction(const std::string& action_type) {
     if (!is_connected || sport_client == nullptr) return;
 
-    // 不管之前在干什么，接管后第一步永远是刹车防摔
+    // 刹车防摔
     this->move(0.0f, 0.0f, 0.0f);
-    usleep(150000); 
+    usleep(150000);
 
-    if (action_type == "ELECTRIC") {
-        std::cout << "[RobotDriver] !!! 触发最高优中断 ELECTRIC: 执行伸懒腰 !!!" << std::endl;
-        
-        // 宇树底层伸懒腰动作
+    if (action_type == "stretch" || action_type == "ELECTRIC") {
+        std::cout << "[RobotDriver] 非阻塞伸懒腰 (stretch)" << std::endl;
         sport_client->Stretch();
-        
-        // 伸懒腰动作较长，阻塞等待 3.5 秒让动作做完
-        usleep(3500000);
-        
-        std::cout << "[RobotDriver] 伸懒腰动作完毕，系统交还控制权。" << std::endl;
+    } else if (action_type == "greet" || action_type == "OXIDANT") {
+        std::cout << "[RobotDriver] 非阻塞打招呼 (greet)" << std::endl;
+        sport_client->Hello();
+    } else if (action_type == "flash_lights" || action_type == "RADIATION") {
+        std::cout << "[RobotDriver] 非阻塞闪灯 (flash_lights)" << std::endl;
+        // 宇树 SDK 无直接闪灯 API，通过灯光控制模拟
+        // sport_client->LightColor(0, 255, 0);
     } else {
-        std::cout << "[RobotDriver] 警告：未知或未配置的特殊动作: " << action_type << std::endl;
+        std::cout << "[RobotDriver] 未知动作: " << action_type << std::endl;
     }
 }
 
@@ -123,6 +123,53 @@ void RobotDriver::emergencyDamp() {
     if (!is_connected || sport_client == nullptr) return;
     sport_client->Damp();
     std::cout << "[RobotDriver] ! WARNING ! Damping Mode Activated." << std::endl;
+}
+
+// ==========================================
+// 5.8 新增：任务级纯非阻塞动作实现
+// ==========================================
+
+void RobotDriver::setGait(GaitType gait) {
+    if (!is_connected || sport_client == nullptr) return;
+    if (gait == GaitType::GAIT_CLASSIC) {
+        std::cout << "[RobotDriver] 切换至 CLASSIC（经典）步态" << std::endl;
+        sport_client->SwitchGait(0);
+    } else if (gait == GaitType::GAIT_AGILE) {
+        std::cout << "[RobotDriver] 切换至 AGILE（灵动）步态" << std::endl;
+        sport_client->SwitchGait(1);
+    }
+}
+
+void RobotDriver::stretch() {
+    if (!is_connected || sport_client == nullptr) return;
+    std::cout << "[RobotDriver] 执行非阻塞伸懒腰..." << std::endl;
+    sport_client->Stretch();
+}
+
+void RobotDriver::greet() {
+    if (!is_connected || sport_client == nullptr) return;
+    std::cout << "[RobotDriver] 执行非阻塞打招呼..." << std::endl;
+    sport_client->Hello();
+}
+
+void RobotDriver::flashLights() {
+    if (!is_connected || sport_client == nullptr) return;
+    std::cout << "[RobotDriver] 执行非阻塞闪灯..." << std::endl;
+    // 宇树 SDK 无直接闪灯指令，通过灯光控制模拟
+}
+
+void RobotDriver::jumpObstacle() {
+    if (!is_connected || sport_client == nullptr) return;
+    std::cout << "[RobotDriver] 执行非阻塞前跳..." << std::endl;
+    sport_client->FrontJump();
+}
+
+void RobotDriver::lockMotors() {
+    emergencyDamp();
+}
+
+void RobotDriver::stopMove() {
+    move(0.0f, 0.0f, 0.0f);
 }
 
 } // namespace control

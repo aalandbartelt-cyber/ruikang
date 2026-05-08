@@ -8,6 +8,12 @@
 namespace ruikang {
 namespace control {
 
+// 步态枚举
+enum class GaitType {
+    GAIT_CLASSIC = 0, // 经典步态（平地巡线）
+    GAIT_AGILE   = 1  // 灵动步态（爬台阶）
+};
+
 class RobotDriver {
 private:
     // 改成指针类型，避免在构造函数中被提前实例化，以确保网络通道优先建立
@@ -34,11 +40,37 @@ public:
     // 原地精准 90 度转向（无视线盲走专用）
     void turn90Degree(bool is_left); 
     
-    // 响应突发最高优中断（如：警示牌触发的伸懒腰）
-    void playSpecialAction(const std::string& action_type); 
+    // 响应突发最高优中断（警示牌触发的伸懒腰/打招呼/闪灯）
+    // ★ 非阻塞：下发指令后立即返回，由 ActionManager 轮询超时
+    void playSpecialAction(const std::string& action_type);
 
     // 紧急阻尼保护
-    void emergencyDamp(); 
+    void emergencyDamp();
+
+    // ==========================================
+    // 5.8 新增：任务级纯非阻塞动作 API
+    // ==========================================
+
+    // 步态切换（非阻塞）
+    void setGait(GaitType gait);
+
+    // 非阻塞伸懒腰 (ELECTRIC)
+    void stretch();
+
+    // 非阻塞打招呼 (OXIDANT)
+    void greet();
+
+    // 非阻塞闪灯 (RADIATION)
+    void flashLights();
+
+    // 非阻塞前跳
+    void jumpObstacle();
+
+    // 终点锁死电机（进入阻尼态）
+    void lockMotors();
+
+    // 紧急刹车（速度归零）
+    void stopMove();
 };
 
 } // namespace control

@@ -27,10 +27,8 @@ int main() {
     driver.initConnection("eth0");
     //lidar.init();
 
-    // 4. 状态机
-    //StateMachine brain(&driver,  new State01Init());
-   // ★★ 临时：跳过 State01/02，直接调试 State03 ★★
-    StateMachine brain(&driver,  new State03Avoidance());
+    // 4. 状态机 — 完整比赛流程
+    StateMachine brain(&driver, new State01Init());
 
     std::cout << "--- FSM Main Loop Started ---" << std::endl;
 

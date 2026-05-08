@@ -1,1 +1,248 @@
-//核心：根据视觉结果调用打招呼等action
+// src/fsm/states/state_07_detection.cpp
+// State07: 检测平台（警示牌识别 + 指定动作执行）
+//
+// 流程：
+//   APPROACH      → 寻迹直行，等待红点出现
+//   RED_DOT_ALIGN → 红点居中 → 狗投影精准覆盖检测点
+//   STOP_AND_READ → 停稳，读取 warning_sign 并映射动作
+//   EXECUTE_ACTION→ ActionManager::triggerAction() 非阻塞下发
+//   WAIT_ACTION   → 轮询 ActionManager::isDone()（超时兜底）
+//   EXIT_FOLLOW   → 继续巡线，离开检测点
+// =====================================================
+#include "fsm/states/state_07_detection.hpp"
+#include "fsm/states/state_09_end_obs.hpp"
+#include "fsm/state_machine.hpp"
+#include "common/config.hpp"
+#include <iostream>
+#include <string>
+
+namespace ruikang {
+namespace fsm {
+
+void State07Detection::enter(StateMachine* sm) {
+    std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH → RED_DOT_ALIGN → STOP&READ → EXECUTE → WAIT → EXIT" << std::endl;
+
+    phase_           = Phase::APPROACH;
+    action_to_play_  = "";
+    action_mgr_.reset(new ruikang::control::ActionManager(*sm->robot_driver));
+    log_tick_        = 0;
+    phase_start_      = std::chrono::steady_clock::now();
+    state_enter_time_ = phase_start_;
+}
+
+void State07Detection::execute(StateMachine* sm) {
+    if (!sm->robot_driver) return;
+
+    auto now = std::chrono::steady_clock::now();
+
+    // ===== ★ 全局超时检查 =====
+    float total_elapsed = std::chrono::duration<float>(now - state_enter_time_).count();
+    if (total_elapsed > config::s07::TOTAL_TIMEOUT) {
+        std::cout << "[FSM] ⏰ State07 全局超时 (" << total_elapsed
+                  << "s)！强制退出" << std::endl;
+        sm->robot_driver->move(0, 0, 0);
+        sm->changeState(new State09EndObs());
+        return;
+    }
+
+    float dt_phase    = std::chrono::duration<float>(now - phase_start_).count();
+    float line_offset = sm->vision_data.line_offset;
+
+    // ================================================================
+    // 阶段 1：APPROACH — 寻迹直行，等待红点出现
+    // ================================================================
+    if (phase_ == Phase::APPROACH) {
+        bool red_dot_seen = sm->vision_data.red_dot_detected;
+
+        // 兜底超时：红点一直没出现
+        if (dt_phase > config::s07::APPROACH_DURATION) {
+            std::cout << "[FSM] ⏰ 红点未出现，超时兜底停靠 (寻迹 " << dt_phase << "s)" << std::endl;
+            phase_       = Phase::STOP_AND_READ;
+            phase_start_ = now;
+            sm->robot_driver->move(0, 0, 0);
+            return;
+        }
+
+        // 检测到红点 → 进入精确对齐
+        if (red_dot_seen) {
+            std::cout << "[FSM] 🔴 检测到红点！进入精确对齐 (cx="
+                      << sm->vision_data.red_dot_center_x << ")" << std::endl;
+            phase_       = Phase::RED_DOT_ALIGN;
+            phase_start_ = now;
+            sm->robot_driver->move(0, 0, 0);
+            return;
+        }
+
+        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
+        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
+
+        if (++log_tick_ % 50 == 0) {
+            std::cout << "[检测][APPROACH] " << dt_phase << "s / "
+                      << config::s07::APPROACH_DURATION << "s"
+                      << " offset=" << line_offset
+                      << " red_dot=" << (red_dot_seen ? "YES" : "no") << std::endl;
+        }
+        return;
+    }
+
+    // ================================================================
+    // 阶段 2：RED_DOT_ALIGN — 精确定位：狗投影覆盖红点
+    // ================================================================
+    if (phase_ == Phase::RED_DOT_ALIGN) {
+        float rx      = sm->vision_data.red_dot_center_x;
+        float error_x = rx - config::s07::IMAGE_CENTER_X;
+
+        // 对齐超时保护
+        if (dt_phase > config::s07::RED_DOT_ALIGN_TIMEOUT) {
+            std::cout << "[FSM] ⏰ 红点对齐超时 (" << dt_phase
+                      << "s)，当前误差=" << error_x << "px，直接停靠" << std::endl;
+            phase_       = Phase::STOP_AND_READ;
+            phase_start_ = now;
+            sm->robot_driver->move(0, 0, 0);
+            return;
+        }
+
+        // 红点丢失（可能已经走过头）
+        if (rx < 0) {
+            sm->robot_driver->move(0, 0, 0);
+            if (++log_tick_ % 20 == 0) {
+                std::cout << "[检测][ALIGN] 红点丢失，原地等待... dt=" << dt_phase << "s" << std::endl;
+            }
+            return;
+        }
+
+        // 已在容忍范围内 → 停靠！
+        if (std::abs(error_x) < config::s07::RED_DOT_CENTER_TOL_PX) {
+            std::cout << "[FSM] ✅ 红点对齐完成 (cx=" << rx
+                      << " error=" << error_x << "px)" << std::endl;
+            sm->robot_driver->move(0, 0, 0);
+            phase_       = Phase::STOP_AND_READ;
+            phase_start_ = now;
+            return;
+        }
+
+        // 闭环对齐：红点偏右 → 狗右转，偏左 → 左转
+        float vyaw = (error_x > 0) ? -config::s07::RED_DOT_ALIGN_VYAW
+                                   : +config::s07::RED_DOT_ALIGN_VYAW;
+        sm->robot_driver->move(0, 0, vyaw);
+
+        if (++log_tick_ % 20 == 0) {
+            std::cout << "[检测][ALIGN] rx=" << rx << " error=" << error_x
+                      << "px  dt=" << dt_phase << "s" << std::endl;
+        }
+        return;
+    }
+
+    // ================================================================
+    // 阶段 3：STOP_AND_READ — 停稳，读取警示牌识别结果
+    // ================================================================
+    if (phase_ == Phase::STOP_AND_READ) {
+        sm->robot_driver->move(0, 0, 0);
+
+        if (dt_phase < config::s07::STOP_DURATION) {
+            if (++log_tick_ % 20 == 0) {
+                std::cout << "[检测][STOP] 停稳中... " << dt_phase << "s" << std::endl;
+            }
+            return;
+        }
+
+        // 读取警示牌
+        const std::string& sign = sm->vision_data.warning_sign;
+        std::cout << "[FSM] 🔍 警示牌识别结果: " << sign << std::endl;
+
+        // 映射动作
+        const char* action = config::s07::action_for_sign(sign);
+        if (action) {
+            action_to_play_ = action;
+            std::cout << "[FSM] 🎬 映射动作: " << action_to_play_ << std::endl;
+            phase_       = Phase::EXECUTE_ACTION;
+            phase_start_ = now;
+        } else {
+            std::cout << "[FSM] ⚠️ 无匹配动作 (sign=" << sign << ")，跳过，直接离开" << std::endl;
+            phase_       = Phase::EXIT_FOLLOW;
+            phase_start_ = now;
+            log_tick_    = 0;
+        }
+        return;
+    }
+
+    // ================================================================
+    // 阶段 4：EXECUTE_ACTION — 调用 ActionManager 触发动作
+    // ================================================================
+    if (phase_ == Phase::EXECUTE_ACTION) {
+        std::cout << "[FSM] 🎬 执行动作: " << action_to_play_ << std::endl;
+        action_mgr_->triggerAction(action_to_play_);
+        phase_       = Phase::WAIT_ACTION;
+        phase_start_ = now;
+        return;
+    }
+
+    // ================================================================
+    // 阶段 5：WAIT_ACTION — 等待动作完成
+    // ================================================================
+    if (phase_ == Phase::WAIT_ACTION) {
+        sm->robot_driver->move(0, 0, 0);
+
+        // ★ ActionManager 非阻塞轮询：动作完成立即离开
+        if (!action_mgr_->isDone()) {
+            // 兜底超时保护
+            if (dt_phase > config::s07::ACTION_TIMEOUT) {
+                std::cout << "[FSM] ⏰ 动作超时 (" << dt_phase << "s)，强制离开" << std::endl;
+                phase_       = Phase::EXIT_FOLLOW;
+                phase_start_ = now;
+                log_tick_    = 0;
+                return;
+            }
+
+            if (++log_tick_ % 30 == 0) {
+                std::cout << "[检测][WAIT] 动作进行中: " << action_to_play_
+                          << " " << dt_phase << "s" << std::endl;
+            }
+            return;
+        }
+
+        std::cout << "[FSM] ✅ 动作完成: " << action_to_play_ << std::endl;
+        phase_       = Phase::EXIT_FOLLOW;
+        phase_start_ = now;
+        log_tick_    = 0;
+        return;
+    }
+
+    // ================================================================
+    // 阶段 6：EXIT_FOLLOW — 继续巡线，离开检测点
+    // ================================================================
+    if (phase_ == Phase::EXIT_FOLLOW) {
+        if (dt_phase > config::s07::EXIT_FOLLOW_DURATION) {
+            std::cout << "[FSM] 🎉 检测平台完成！退出 State07" << std::endl;
+            sm->robot_driver->move(0, 0, 0);
+            sm->changeState(new State09EndObs());
+            return;
+        }
+
+        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
+        sm->robot_driver->move(config::s07::EXIT_FOLLOW_VX, 0, vyaw);
+
+        if (++log_tick_ % 50 == 0) {
+            std::cout << "[检测][EXIT] 离开检测点 " << dt_phase << "s / "
+                      << config::s07::EXIT_FOLLOW_DURATION << "s"
+                      << " offset=" << line_offset << std::endl;
+        }
+        return;
+    }
+
+    if (phase_ == Phase::FINISHED) {
+        sm->robot_driver->move(0, 0, 0);
+    }
+}
+
+void State07Detection::exit(StateMachine* sm) {
+    if (sm->robot_driver) {
+        sm->robot_driver->move(0, 0, 0);
+    }
+    action_mgr_.reset();
+    std::cout << "[FSM] <<< 退出 STATE_07" << std::endl;
+}
+
+} // namespace fsm
+} // namespace ruikang
