@@ -3,6 +3,13 @@
     "udp_port": 8080,
     "black_line_threshold": 60,
     "enable_go2_cam": true,
-    "front_camera_id": "/dev/video2",
-    "_注释": "Go2 前置摄像头 v4l2 路径。如果不确定设备号，在狗上执行 ls /dev/video* 确认。设为 null 则禁用警示牌+ArUco识别"
+    "front_camera_source": "unitree",
+    "front_camera_id": "unitree://go2_front",
+    "network_interface": "eth0",
+    "_注释": {
+        "front_camera_source": "unitree = Go2内置前摄(VideoClient); v4l2 = 外接USB摄像头(cv2.VideoCapture)",
+        "front_camera_id": "v4l2模式填 /dev/videoX; unitree模式忽略此值",
+        "network_interface": "DDS通道网卡，Go2默认eth0",
+        "enable_go2_cam": "true/false，设为false或front_camera_id为null则禁用前摄"
+    }
 }

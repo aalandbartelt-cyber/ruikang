@@ -235,6 +235,8 @@ namespace s07 {
         if (sign == "ELECTRIC")  return "stretch";
         if (sign == "OXIDANT")   return "greet";
         if (sign == "RADIATION") return "flash_lights";
+        if (sign == "FIRE")      return "greet";  // 当心强氧化物 → 打招呼
+        if (sign == "TOXIC")     return "stretch";
         return nullptr;  // NONE / 无法识别 → 不做动作
     }
 }

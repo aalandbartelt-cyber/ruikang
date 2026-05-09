@@ -29,6 +29,7 @@ except ImportError as e:
 
 from communication.udp_sender import UDPSender
 from hardware.realsense_handler import RealSenseHandler
+from hardware.go2_camera import Go2FrontCamera
 
 def get_stable(history_deque):
     """防抖函数：连续出现 3 次才认为有效"""
@@ -53,7 +54,9 @@ def main():
     udp_ip = config.get('udp_ip', '127.0.0.1')
     udp_port = config.get('udp_port', 8080)
     enable_go2_cam = config.get('enable_go2_cam', True)
-    front_cam_id = config.get('front_camera_id') # 可能是 null (None) 或路径
+    front_cam_source = config.get('front_camera_source', 'v4l2')  # unitree 或 v4l2
+    front_cam_id = config.get('front_camera_id')
+    network_iface = config.get('network_interface', 'eth0')
 
     # ================= 2. 初始化硬件 (防弹衣模式) =================
     # A. 深度相机 (D435i)
@@ -66,14 +69,25 @@ def main():
         print(f"⚠️ D435i 初始化异常: {e}")
         rs_handler = None
 
-    # B. 前置摄像头 (Go2 自带)
-    # 关键：判断 front_cam_id 是否为 None
+    # B. 前置摄像头 (Go2 自带 或 外接USB)
+    cap_front = None
     if enable_go2_cam and front_cam_id is not None:
-        cap_front = cv2.VideoCapture(front_cam_id)
-        print(f"📷 前置摄像头已启用: {front_cam_id}")
+        if front_cam_source == "unitree":
+            try:
+                cap_front = Go2FrontCamera(network_iface)
+                print(f"📷 前置摄像头已启用: unitree://go2_front (VideoClient)")
+            except Exception as e:
+                print(f"⚠️ Go2 前摄初始化失败: {e}")
+        else:
+            # v4l2 模式：直接用 cv2.VideoCapture 打开 /dev/videoX
+            cap_front = cv2.VideoCapture(front_cam_id)
+            if cap_front.isOpened():
+                print(f"📷 前置摄像头已启用: {front_cam_id} (V4L2)")
+            else:
+                print(f"⚠️ 无法打开 V4L2 设备: {front_cam_id}")
+                cap_front = None
     else:
-        cap_front = None
-        print("⚠️ 前置摄像头已禁用 (config 设为 null)")
+        print("⚠️ 前置摄像头已禁用 (config 中设为 null 或 enable_go2_cam=false)")
 
     # C. UDP 通信
     try:
@@ -86,7 +100,7 @@ def main():
     # 防抖队列
     sign_history = deque(maxlen=10)
     tag_history = deque(maxlen=15)
-    prev_time = 0
+    log_tick = 0
     
     print("--- 👁️ 视觉系统开始循环，按 Ctrl+C 或 Q 退出 ---")
 
@@ -158,7 +172,12 @@ def main():
                     "red_dot_center_x": int(red_dot_cx),
                 }
                 sender.send_data(payload)
-                # 终端精简输出：Sign + ArUco（深度/偏移已由 udp_sender 打印）
+
+                # 调试日志：每秒打印一次警示牌 + 红点状态（深度/偏移已由 udp_sender 每帧打印）
+                if log_tick % 30 == 0:
+                    print(f"[VIS] Sign={stable_sign} | Tag={stable_tag} | "
+                          f"RedDot={red_dot_detected}(cx={red_dot_cx}) | "
+                          f"off={offset:.0f} trend={trend:.0f}")
 
             # ========== E. 画面预览 (🚨 提交前请保持注释状态) ==========
             # if cap_front is not None and frame_front is not None:
@@ -168,6 +187,7 @@ def main():
             #                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2)
             #     cv2.imshow("Go2 Vision Debug", frame_front)
 
+            log_tick += 1
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 

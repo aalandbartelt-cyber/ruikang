@@ -6,7 +6,8 @@ namespace ruikang {
 namespace control {
 
 RobotDriver::RobotDriver() {
-    sport_client = nullptr; 
+    sport_client = nullptr;
+    vui_client   = nullptr;
     is_connected = false;
     std::cout << "[RobotDriver] Initialized. Awaiting hardware connection..." << std::endl;
 }
@@ -30,6 +31,7 @@ RobotDriver::~RobotDriver() {
         emergencyDamp(); 
         
         delete sport_client;
+        delete vui_client;
     }
     std::cout << "[RobotDriver] Destroyed safely. Hardware protected." << std::endl;
 }
@@ -41,7 +43,11 @@ bool RobotDriver::initConnection(const std::string& network_interface) {
     sport_client = new unitree::robot::go2::SportClient();
     sport_client->SetTimeout(10.0f);
     sport_client->Init();
-    
+
+    vui_client = new unitree::robot::go2::VuiClient();
+    vui_client->SetTimeout(1.0f);
+    vui_client->Init();
+
     std::cout << "[RobotDriver] 真实硬件连接成功！网卡: " << network_interface << std::endl;
     is_connected = true;
     return true;
@@ -153,9 +159,20 @@ void RobotDriver::greet() {
 }
 
 void RobotDriver::flashLights() {
-    if (!is_connected || sport_client == nullptr) return;
-    std::cout << "[RobotDriver] 执行非阻塞闪灯..." << std::endl;
-    // 宇树 SDK 无直接闪灯指令，通过灯光控制模拟
+    if (!is_connected || vui_client == nullptr) {
+        std::cout << "[RobotDriver] ⚠️ VuiClient 未就绪，无法闪灯" << std::endl;
+        return;
+    }
+    std::cout << "[RobotDriver] 💡 前灯闪烁 3 次..." << std::endl;
+
+    // 3 次闪烁：亮 250ms → 灭 250ms，总计 1.5s
+    for (int i = 0; i < 3; i++) {
+        vui_client->SetBrightness(10);   // 最亮
+        usleep(250000);
+        vui_client->SetBrightness(0);    // 熄灭
+        usleep(250000);
+    }
+    std::cout << "[RobotDriver] ✅ 闪灯完成" << std::endl;
 }
 
 void RobotDriver::jumpObstacle() {

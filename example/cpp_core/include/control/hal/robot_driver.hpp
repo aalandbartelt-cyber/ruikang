@@ -2,6 +2,7 @@
 #define ROBOT_DRIVER_HPP
 
 #include <unitree/robot/go2/sport/sport_client.hpp>
+#include <unitree/robot/go2/vui/vui_client.hpp>
 #include <iostream>
 #include <string>
 
@@ -17,7 +18,8 @@ enum class GaitType {
 class RobotDriver {
 private:
     // 改成指针类型，避免在构造函数中被提前实例化，以确保网络通道优先建立
-    unitree::robot::go2::SportClient* sport_client; 
+    unitree::robot::go2::SportClient* sport_client;
+    unitree::robot::go2::VuiClient*   vui_client;   // 前灯控制
     bool is_connected;
 
 public:
