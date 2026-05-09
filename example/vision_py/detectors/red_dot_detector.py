@@ -30,15 +30,34 @@ def detect_red_dot(frame):
     
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area > 500:  # 面积阈值，可根据现场红点大小调整
-            (cx, cy), radius = cv2.minEnclosingCircle(cnt)
-            red_dot_detected = True
-            red_dot_center_x = int(cx)
+        if area > 500:  
+            perimeter = cv2.arcLength(cnt, True)
+            if perimeter == 0: continue
             
-            # 画图预览（仅限本地调试使用）
-            cv2.circle(frame, (int(cx), int(cy)), int(radius), (0, 255, 0), 2)
-            cv2.circle(frame, (int(cx), int(cy)), 3, (255, 0, 0), -1)
-            break # 假设画面中只有一个有效红点
+            # 1. 获取外接圆及半径
+            (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+            circle_area = np.pi * (radius ** 2)
+            
+            # 2. 计算实心度 (轮廓面积 / 外接圆面积)
+            # 如果是空心的或者不规则的，这个值会很小；完美的实心圆接近 1.0
+            fill_ratio = area / circle_area if circle_area > 0 else 0
+            
+            # 3. 计算轮廓圆度 (边缘的平滑程度)
+            circularity = 4 * np.pi * (area / (perimeter * perimeter))
+            
+            # 4. 计算长宽比
+            x, y, w, h = cv2.boundingRect(cnt)
+            aspect_ratio = float(w) / h
+            
+            # 🚀 终极三重装甲：必须是正方形区域内 + 边缘必须够圆 + 必须是实心！
+            if 0.8 < aspect_ratio < 1.2 and circularity > 0.75 and fill_ratio > 0.8:
+                red_dot_detected = True
+                red_dot_center_x = int(cx)
+                
+                # 画图预览（绿圈包围，红点准心）
+                cv2.circle(frame, (int(cx), int(cy)), int(radius), (0, 255, 0), 2)
+                cv2.circle(frame, (int(cx), int(cy)), 3, (0, 0, 255), -1)
+                break
             
     return red_dot_detected, red_dot_center_x, frame
 
