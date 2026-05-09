@@ -6,6 +6,7 @@
 //   MOVE_TO_DOT   → 红点出现后继续巡线逼近（补偿D435i前倾视角）
 //   RED_DOT_ALIGN → 红点居中 → 狗投影精准覆盖检测点
 //   TURN_TO_SIGN  → 原地左转 90° 面向警示牌
+//   BACK_AWAY     → 后退 1s 拉开距离（离警示牌太近）
 //   STOP_AND_READ → 停稳，读取 warning_sign 并映射动作
 //   EXECUTE_ACTION→ ActionManager::triggerAction() 非阻塞下发
 //   WAIT_ACTION   → 轮询 ActionManager::isDone()（超时兜底）
@@ -24,7 +25,7 @@ namespace fsm {
 
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH → MOVE_TO_DOT(逼近补偿) → RED_DOT_ALIGN → TURN_TO_SIGN(左90°) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH → MOVE_TO_DOT(盲巡3.6s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退1s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
 
     phase_            = Phase::APPROACH;
     action_to_play_   = "";
@@ -174,9 +175,9 @@ void State07Detection::execute(StateMachine* sm) {
 
         if (accumulated_yaw_ >= config::s07::TURN_TO_SIGN_TARGET) {
             std::cout << "[FSM] ✅ 左转 90° 完成 ("
-                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 读取警示牌" << std::endl;
+                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 后退 1s 拉开距离" << std::endl;
             sm->robot_driver->move(0, 0, 0);
-            phase_       = Phase::STOP_AND_READ;
+            phase_       = Phase::BACK_AWAY;
             phase_start_ = now;
             return;
         }
@@ -191,7 +192,28 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 5：STOP_AND_READ — 停稳，读取警示牌识别结果
+    // 阶段 5：BACK_AWAY — 后退拉开距离（离警示牌太近）
+    // ================================================================
+    if (phase_ == Phase::BACK_AWAY) {
+        if (dt_phase > config::s07::BACK_AWAY_DURATION) {
+            std::cout << "[FSM] ✅ 后退完成 (" << dt_phase << "s) → 读取警示牌" << std::endl;
+            sm->robot_driver->move(0, 0, 0);
+            phase_       = Phase::STOP_AND_READ;
+            phase_start_ = now;
+            return;
+        }
+
+        sm->robot_driver->move(config::s07::BACK_AWAY_VX, 0, 0);
+
+        if (++log_tick_ % 20 == 0) {
+            std::cout << "[检测][BACK] 后退中... " << dt_phase << "s / "
+                      << config::s07::BACK_AWAY_DURATION << "s" << std::endl;
+        }
+        return;
+    }
+
+    // ================================================================
+    // 阶段 6：STOP_AND_READ — 停稳，读取警示牌识别结果
     // ================================================================
     if (phase_ == Phase::STOP_AND_READ) {
         sm->robot_driver->move(0, 0, 0);
@@ -224,7 +246,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 6：EXECUTE_ACTION — 调用 ActionManager 触发动作
+    // 阶段 7：EXECUTE_ACTION — 调用 ActionManager 触发动作
     // ================================================================
     if (phase_ == Phase::EXECUTE_ACTION) {
         std::cout << "[FSM] 🎬 执行动作: " << action_to_play_ << std::endl;
@@ -235,7 +257,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 7：WAIT_ACTION — 等待动作完成
+    // 阶段 8：WAIT_ACTION — 等待动作完成
     // ================================================================
     if (phase_ == Phase::WAIT_ACTION) {
         sm->robot_driver->move(0, 0, 0);
@@ -266,7 +288,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 8：TURN_BACK — 原地右转 90° 回正，面向巡线方向
+    // 阶段 9：TURN_BACK — 原地右转 90° 回正，面向巡线方向
     // ================================================================
     if (phase_ == Phase::TURN_BACK) {
         float vyaw_mag   = config::s07::TURN_BACK_VYAW;
@@ -292,7 +314,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 9：EXIT_FOLLOW — 继续巡线，离开检测点
+    // 阶段 10：EXIT_FOLLOW — 继续巡线，离开检测点
     // ================================================================
     if (phase_ == Phase::EXIT_FOLLOW) {
         if (dt_phase > config::s07::EXIT_FOLLOW_DURATION) {

@@ -22,6 +22,7 @@ private:
         MOVE_TO_DOT,     // ★ 红点出现后继续巡线逼近（补偿D435i前倾视角）
         RED_DOT_ALIGN,   // 红点居中 → 狗投影精准覆盖检测点
         TURN_TO_SIGN,    // 左转 90° 面向警示牌
+        BACK_AWAY,       // 后退拉开距离（离警示牌太近）
         STOP_AND_READ,   // 停稳，读取警示牌识别结果
         EXECUTE_ACTION,  // 调用 ActionManager 触发动作
         WAIT_ACTION,     // 轮询 ActionManager::isDone()

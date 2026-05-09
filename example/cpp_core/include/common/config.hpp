@@ -209,7 +209,11 @@ namespace s07 {
     constexpr float APPROACH_DURATION = 18.0f;   // 寻迹超时 (s)，过弯后长直道需足够时间
 
     // ===== RED_DOT_FORWARD：检测到红点后继续巡线逼近（D435i 前倾 45°，需补偿） =====
-    constexpr float RED_DOT_FORWARD_DURATION = 1.5f;   // 红点出现后再巡线 1-2s 才真正站在红点上
+    constexpr float RED_DOT_FORWARD_DURATION = 3.6f;   // 红点出现后盲巡 3.6s 站到红点上（5.9实测）
+
+    // ===== BACK_AWAY：左转后离警示牌太近，后退拉开距离 =====
+    constexpr float BACK_AWAY_VX       = -0.06f;  // 后退速度（负 = 后退）
+    constexpr float BACK_AWAY_DURATION = 1.0f;    // 后退时长 (s)
 
     // ===== RED_DOT_ALIGN：红点精确定位 =====
     constexpr float RED_DOT_CENTER_TOL_PX = 25.0f;  // 红点中心偏差容忍（像素）
