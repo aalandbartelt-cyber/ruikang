@@ -133,10 +133,10 @@ void RobotDriver::setGait(GaitType gait) {
     if (!is_connected || sport_client == nullptr) return;
     if (gait == GaitType::GAIT_CLASSIC) {
         std::cout << "[RobotDriver] 切换至 CLASSIC（经典）步态" << std::endl;
-        sport_client->SwitchGait(0);
+        sport_client->ClassicWalk(true);
     } else if (gait == GaitType::GAIT_AGILE) {
-        std::cout << "[RobotDriver] 切换至 AGILE（灵动）步态" << std::endl;
-        sport_client->SwitchGait(1);
+        std::cout << "[RobotDriver] 切换至 AGILE（灵动/Economic）步态" << std::endl;
+        sport_client->EconomicGait();
     }
 }
 

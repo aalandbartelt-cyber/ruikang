@@ -6,6 +6,10 @@
 #include "fsm/state_machine.hpp"
 #include "fsm/states/state_01_init.hpp"
 #include "fsm/states/state_03_avoidance.hpp"
+#include "fsm/states/state_04_stairs.hpp"
+#include "fsm/states/state_07_detection.hpp"
+#include "fsm/states/state_09_end_obs.hpp"
+#include "fsm/states/state_10_finish.hpp"
 #include <unitree/robot/channel/channel_factory.hpp>
 
 using namespace ruikang::control;

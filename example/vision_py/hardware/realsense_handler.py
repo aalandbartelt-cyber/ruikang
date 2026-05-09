@@ -20,48 +20,77 @@ import numpy as np
 class RealSenseHandler:
     def __init__(self, depth_width=848, depth_height=480,
                  color_width=640, color_height=480, fps=30):
-        # --- 新增：强制硬件复位防卡死 ---
-        import time
-        ctx = rs.context()
-        if len(ctx.query_devices()) > 0:
-            dev = ctx.query_devices()[0]
-            print(f"🔄 正在硬件重启 D435i...")
-            dev.hardware_reset()
-            time.sleep(2.5)  # 必须等待相机重新上线
-        # --------------------------------
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-
-        # 启用深度流和彩色流
-        self.config.enable_stream(
-            rs.stream.depth, depth_width, depth_height, rs.format.z16, fps
-        )
-        self.config.enable_stream(
-            rs.stream.color, color_width, color_height, rs.format.bgr8, fps
-        )
-
-        # 启动 pipeline
-        self.profile = self.pipeline.start(self.config)
-
-        # 把深度对齐到彩色坐标系
-        self.align = rs.align(rs.stream.color)
-
-        # 获取深度尺度（米/单位）
-        depth_sensor = self.profile.get_device().first_depth_sensor()
-        self.depth_scale = depth_sensor.get_depth_scale()
-        print(f"📷 D435i 启动成功，depth_scale={self.depth_scale}")
-
-        # 深度滤波器（内置去噪）
+        self.pipeline = None
+        self.align = None
+        self.depth_scale = 0.001
         self.spatial = rs.spatial_filter()
         self.temporal = rs.temporal_filter()
         self.hole_filling = rs.hole_filling_filter()
-
-        # 缓存最新一帧
         self._last_color = None
         self._last_depth = None
+        self._started = False
+
+        # 保存配置参数供 start() 使用
+        self._depth_width = depth_width
+        self._depth_height = depth_height
+        self._color_width = color_width
+        self._color_height = color_height
+        self._fps = fps
+
+    def start(self):
+        """启动 D435i 管线（由 main_vision.py 调用），返回 True/False"""
+        import time
+
+        # 检查设备是否存在
+        ctx = rs.context()
+        devices = ctx.query_devices()
+        if len(devices) == 0:
+            print("[RS] ❌ 未检测到 D435i，请检查 USB 连接")
+            return False
+
+        # 仅在相机卡死时才硬件复位（正常启动不 reset）
+        dev = devices[0]
+        try:
+            # 尝试快速探测设备是否响应
+            dev.get_info(rs.camera_info.name)
+            print(f"[RS] 检测到设备: {dev.get_info(rs.camera_info.name)}")
+        except:
+            print("[RS] 🔄 设备无响应，尝试硬件复位...")
+            try:
+                dev.hardware_reset()
+                time.sleep(3.0)
+            except:
+                pass
+
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+
+        try:
+            self.config.enable_stream(
+                rs.stream.depth, self._depth_width, self._depth_height,
+                rs.format.z16, self._fps
+            )
+            self.config.enable_stream(
+                rs.stream.color, self._color_width, self._color_height,
+                rs.format.bgr8, self._fps
+            )
+            self.profile = self.pipeline.start(self.config)
+        except Exception as e:
+            print(f"[RS] ❌ 管线启动失败: {e}")
+            self.pipeline = None
+            return False
+
+        self.align = rs.align(rs.stream.color)
+        depth_sensor = self.profile.get_device().first_depth_sensor()
+        self.depth_scale = depth_sensor.get_depth_scale()
+        self._started = True
+        print(f"[RS] ✅ D435i 启动成功，depth_scale={self.depth_scale:.4f}")
+        return True
 
     def update(self):
         """主循环每次调用，拉一帧新数据"""
+        if not self._started or self.pipeline is None:
+            return False
         try:
             frames = self.pipeline.wait_for_frames(timeout_ms=2000)
         except Exception as e:
@@ -85,12 +114,22 @@ class RealSenseHandler:
         return True
 
     def get_color(self):
-        """返回当前彩色帧（用于寻迹和显示）"""
+        """返回当前彩色帧"""
+        return self._last_color
+
+    def get_color_frame(self):
+        """返回当前彩色帧（main_vision.py 调用的接口名）"""
         return self._last_color
 
     def get_depth(self):
         """返回当前深度帧"""
         return self._last_depth
+
+    def get_obstacle_distances(self):
+        """返回 (depth_front, depth_left, depth_right) 三方向距离"""
+        if self._last_depth is None:
+            return 9.99, 9.99, 9.99
+        return self.get_front_distance(), self.get_left_distance(), self.get_right_distance()
 
     def get_distance_in_roi(self, roi_x_start, roi_x_end,
                              roi_y_start, roi_y_end):
@@ -154,7 +193,9 @@ class RealSenseHandler:
 
     def stop(self):
         try:
-            self.pipeline.stop()
-            print("📷 D435i 已停止")
+            if self.pipeline is not None:
+                self.pipeline.stop()
+                print("[RS] 📷 D435i 已停止")
+            self._started = False
         except Exception as e:
             print(f"[RS] 停止异常: {e}")

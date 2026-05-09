@@ -106,7 +106,9 @@ def main():
             # ========== B. 前置相机：警示牌与标识识别 ==========
             stable_sign = "NONE"
             stable_tag = "NONE"
-            tag_cx, tag_cy = -1, -1 
+            tag_cx, tag_cy = -1, -1
+            red_dot_detected = False
+            red_dot_cx = -1
             frame_front = None
 
             if cap_front is not None:
@@ -121,11 +123,11 @@ def main():
                     raw_tag, raw_cx, raw_cy, frame_front = process_tag(frame_front)
                     tag_history.append(raw_tag)
                     stable_tag = get_stable(tag_history)
-                    
+
                     if raw_cx != -1:
                         tag_cx, tag_cy = raw_cx, raw_cy
 
-                    # 👇 新增这一行：调用红点检测函数
+                    # 红点检测（State07 RED_DOT_ALIGN 定位用）
                     red_dot_detected, red_dot_cx, frame_front = detect_red_dot(frame_front)
 
             # ========== C. 逻辑映射 (0/1/2) ==========
@@ -147,18 +149,16 @@ def main():
                     "aruco_center_x": int(tag_cx),
                     "aruco_center_y": int(tag_cy),
                     "line_offset": int(offset),
-                    "turn_trend": int(trend),  # 👈 新增：把预判趋势发给控制端
+                    "turn_trend": int(trend),
                     "depth_front": float(depth_front),
                     "depth_left": float(depth_left),
                     "depth_right": float(depth_right),
-                    # 👇 新增这两个红点字段，发给状态机
+                    # 红点定位字段（State07 RED_DOT_ALIGN 依赖）
                     "red_dot_detected": red_dot_detected,
                     "red_dot_center_x": int(red_dot_cx),
                 }
                 sender.send_data(payload)
-                
-                # 终端调试信息（生产环境建议保留，方便查看实时状态）
-                print(f"[UDP] Sign: {stable_sign} | ID: {platform_id} | Pos: ({int(tag_cx)}, {int(tag_cy)})")
+                # 终端精简输出：Sign + ArUco（深度/偏移已由 udp_sender 打印）
 
             # ========== E. 画面预览 (🚨 提交前请保持注释状态) ==========
             # if cap_front is not None and frame_front is not None:
