@@ -14,6 +14,7 @@ from collections import deque, Counter
 
 from detectors.line_tracker import find_line_offset
 from detectors.sign_detector import process_sign
+from detectors.red_dot_detector import detect_red_dot  # 👈 新增这一行
 
 # ⚠️ 兼容层：处理 tag_detector 接口
 try:
@@ -124,6 +125,9 @@ def main():
                     if raw_cx != -1:
                         tag_cx, tag_cy = raw_cx, raw_cy
 
+                    # 👇 新增这一行：调用红点检测函数
+                    red_dot_detected, red_dot_cx, frame_front = detect_red_dot(frame_front)
+
             # ========== C. 逻辑映射 (0/1/2) ==========
             platform_id = 0
             # 💡 确保这里包含 "ARUCO_0"
@@ -147,6 +151,9 @@ def main():
                     "depth_front": float(depth_front),
                     "depth_left": float(depth_left),
                     "depth_right": float(depth_right),
+                    # 👇 新增这两个红点字段，发给状态机
+                    "red_dot_detected": red_dot_detected,
+                    "red_dot_center_x": int(red_dot_cx),
                 }
                 sender.send_data(payload)
                 
