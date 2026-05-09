@@ -49,8 +49,8 @@ def detect_red_dot(frame):
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = float(w) / h
             
-            # 🚀 终极三重装甲：必须是正方形区域内 + 边缘必须够圆 + 必须是实心！
-            if 0.8 < aspect_ratio < 1.2 and circularity > 0.75 and fill_ratio > 0.8:
+            # 三重过滤（放宽长宽比——D435i 45°前倾导致圆形变椭圆）
+            if 0.55 < aspect_ratio < 1.8 and circularity > 0.55 and fill_ratio > 0.6:
                 red_dot_detected = True
                 red_dot_center_x = int(cx)
                 

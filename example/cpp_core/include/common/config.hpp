@@ -205,8 +205,11 @@ namespace s04 {
 // =====================================================
 namespace s07 {
     // ===== APPROACH：寻迹靠近检测点 =====
-    constexpr float APPROACH_VX       = 0.08f;   // 巡线速度
-    constexpr float APPROACH_DURATION = 8.0f;    // 寻迹超时 (s)，兜底保护
+    constexpr float APPROACH_VX       = 0.18f;   // 巡线速度
+    constexpr float APPROACH_DURATION = 18.0f;   // 寻迹超时 (s)，过弯后长直道需足够时间
+
+    // ===== RED_DOT_FORWARD：检测到红点后继续巡线逼近（D435i 前倾 45°，需补偿） =====
+    constexpr float RED_DOT_FORWARD_DURATION = 1.5f;   // 红点出现后再巡线 1-2s 才真正站在红点上
 
     // ===== RED_DOT_ALIGN：红点精确定位 =====
     constexpr float RED_DOT_CENTER_TOL_PX = 25.0f;  // 红点中心偏差容忍（像素）
@@ -214,20 +217,26 @@ namespace s07 {
     constexpr float RED_DOT_ALIGN_TIMEOUT  = 5.0f;  // 对齐超时 (s)
     constexpr int   IMAGE_CENTER_X         = 320;   // 图像水平中心（640x480）
 
+    // ===== TURN_TO_SIGN：红点定位后左转 90° 面向警示牌 =====
+    constexpr float TURN_TO_SIGN_VYAW   = 0.50f;   // 左转角速度 (rad/s)
+    constexpr float TURN_TO_SIGN_TARGET = 1.5708f; // 目标 90°
+
     // ===== STOP_AND_READ：停稳读取 =====
     constexpr float STOP_DURATION     = 1.0f;    // 停稳确认时间 (s)
 
     // ===== WAIT_ACTION：等待动作完成 =====
-    // ★ TODO（X 实现 isActionDone() 后，用轮询替代固定超时）：
-    //   当前：固定超时 3s，之后无论是否完成都继续
     constexpr float ACTION_TIMEOUT    = 3.0f;
+
+    // ===== TURN_BACK：动作完成后右转 90° 回正，面向巡线方向 =====
+    constexpr float TURN_BACK_VYAW   = 0.50f;   // 右转角速度 (rad/s)
+    constexpr float TURN_BACK_TARGET = 1.5708f; // 目标 90°
 
     // ===== EXIT_FOLLOW：继续巡线离开 =====
     constexpr float EXIT_FOLLOW_VX       = 0.08f;
     constexpr float EXIT_FOLLOW_DURATION = 3.0f;
 
     // ===== 安全保护 =====
-    constexpr float TOTAL_TIMEOUT     = 30.0f;
+    constexpr float TOTAL_TIMEOUT     = 45.0f;   // 含两次原地转弯，适当放宽
 
     // ★ 警示牌 → 动作映射（由 ActionManager::triggerAction 非阻塞执行）
     //   伸懒腰(stretch) / 打招呼(greet) / 闪灯(flash_lights) — 三项均为非阻塞，≤3s

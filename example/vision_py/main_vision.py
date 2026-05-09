@@ -117,12 +117,13 @@ def main():
             # 接收两个返回值：当前偏移量 和 弯道趋势
             offset, trend = find_line_offset(color_frame, threshold=config.get("black_line_threshold", 60))
 
+            # ★ 红点检测：用 D435i 朝下看地面（不是 Go2 前摄！）
+            red_dot_detected, red_dot_cx, _ = detect_red_dot(color_frame)
+
             # ========== B. 前置相机：警示牌与标识识别 ==========
             stable_sign = "NONE"
             stable_tag = "NONE"
             tag_cx, tag_cy = -1, -1
-            red_dot_detected = False
-            red_dot_cx = -1
             frame_front = None
 
             if cap_front is not None:
@@ -140,9 +141,6 @@ def main():
 
                     if raw_cx != -1:
                         tag_cx, tag_cy = raw_cx, raw_cy
-
-                    # 红点检测（State07 RED_DOT_ALIGN 定位用）
-                    red_dot_detected, red_dot_cx, frame_front = detect_red_dot(frame_front)
 
             # ========== C. 逻辑映射 (0/1/2) ==========
             platform_id = 0
