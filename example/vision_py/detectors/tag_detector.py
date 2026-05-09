@@ -56,7 +56,7 @@ def process_tag(frame):
                 cy = int(np.mean(corner[:, 1]))
                 cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
 
-    # --- C. 红色 C 标志检测 (第二优先级) ---
+    # --- C. 红色 C 标志检测 (抗干扰重构) ---
     lower_red1, upper_red1 = np.array([0, 110, 50]), np.array([10, 255, 255])
     lower_red2, upper_red2 = np.array([160, 110, 50]), np.array([180, 255, 255])
     mask_red = cv2.bitwise_or(cv2.inRange(hsv, lower_red1, upper_red1), 
@@ -68,16 +68,20 @@ def process_tag(frame):
     
     for cnt in contours_r:
         area = cv2.contourArea(cnt)
-        if area > 1000:
+        # 🛡️ 装甲 1：提高面积门槛，忽略远处的小红点和小噪点
+        if area > 1800:
             perimeter = cv2.arcLength(cnt, True)
             if perimeter == 0: continue
             circularity = 4 * np.pi * (area / (perimeter * perimeter))
             
-            # 👇 就是这里！先计算外接圆，再算 rect_ratio，最后才做 if 判断
-            (circle_x, circle_y), radius = cv2.minEnclosingCircle(cnt)
-            rect_ratio = area / (np.pi * (radius ** 2)) if radius > 0 else 0
+            # 🛡️ 装甲 2：新增长宽比检测（外接矩形必须接近正方形，防止红色长条状物体误判）
+            x, y, w, h = cv2.boundingRect(cnt)
+            aspect_ratio = float(w) / h
             
-            if circularity > 0.4 or rect_ratio > 0.5:
+            # 🛡️ 装甲 3：必须非常圆！(长宽比在 0.8~1.2 之间，且圆度大于 0.75)
+            if 0.8 < aspect_ratio < 1.2 and circularity > 0.75:
+                (circle_x, circle_y), radius = cv2.minEnclosingCircle(cnt)
+                
                 # 如果没认出 ArUco，才采用圆圈的坐标
                 if tag_result == "NONE":
                     cx, cy = int(circle_x), int(circle_y)
