@@ -117,9 +117,9 @@ namespace s04 {
     // ===== CLIMB_ARC：弧线连贯上下台阶 =====
     // 狗尺寸大无法四腿站第三阶，上到第二阶后边前进边左转画弧
     // 单一连贯动作替代原来的 上台阶→顶部转90°→下台阶
-    constexpr float CLIMB_ARC_VX       = 0.05f;   // 弧线前进速度 (m/s)，慢速保稳
-    constexpr float CLIMB_ARC_VYAW     = 0.12f;   // 弧线左转角速度 (rad/s)，12s≈82°
-    constexpr float CLIMB_ARC_DURATION = 12.0f;   // 弧线总时长 (s)，需现场标定
+    constexpr float CLIMB_ARC_VX       = 0.12f;   // 弧线前进速度 (m/s)，灵动步态需>0.10
+    constexpr float CLIMB_ARC_VYAW     = 0.18f;   // 弧线左转角速度 (rad/s)，8s≈82°
+    constexpr float CLIMB_ARC_DURATION = 8.0f;    // 弧线总时长 (s)，需现场标定
 
     // ===== EXIT_FOLLOW：离开台阶 =====
     constexpr float EXIT_FOLLOW_VX       = 0.18f;
