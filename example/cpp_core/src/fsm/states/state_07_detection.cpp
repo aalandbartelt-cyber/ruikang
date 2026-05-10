@@ -80,13 +80,19 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
+        // 弯道预判：turn_trend叠加offset提前转弯（D435i 45°前倾视距短）
+        float trend = sm->vision_data.turn_trend;
+        float effective_offset = line_offset;
+        if (std::abs(trend) > 40.0f) {
+            effective_offset = line_offset + trend * 1.5f;
+        }
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][APPROACH] " << dt_phase << "s / "
                       << config::s07::APPROACH_DURATION << "s"
-                      << " offset=" << line_offset
+                      << " offset=" << line_offset << " trend=" << trend
                       << " red_dot=" << (red_dot_seen ? "YES" : "no") << std::endl;
         }
         return;
@@ -105,13 +111,19 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
+        // 弯道预判：turn_trend叠加offset提前转弯
+        float trend = sm->vision_data.turn_trend;
+        float effective_offset = line_offset;
+        if (std::abs(trend) > 40.0f) {
+            effective_offset = line_offset + trend * 1.5f;
+        }
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 30 == 0) {
             std::cout << "[检测][MOVE] 逼近红点 " << dt_phase << "s / "
                       << config::s07::RED_DOT_FORWARD_DURATION << "s"
-                      << " offset=" << line_offset << std::endl;
+                      << " offset=" << line_offset << " trend=" << trend << std::endl;
         }
         return;
     }
@@ -324,13 +336,18 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::EXIT_FOLLOW_VX);
+        float trend = sm->vision_data.turn_trend;
+        float effective_offset = line_offset;
+        if (std::abs(trend) > 40.0f) {
+            effective_offset = line_offset + trend * 1.5f;
+        }
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s07::EXIT_FOLLOW_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][EXIT] 离开检测点 " << dt_phase << "s / "
                       << config::s07::EXIT_FOLLOW_DURATION << "s"
-                      << " offset=" << line_offset << std::endl;
+                      << " offset=" << line_offset << " trend=" << trend << std::endl;
         }
         return;
     }
