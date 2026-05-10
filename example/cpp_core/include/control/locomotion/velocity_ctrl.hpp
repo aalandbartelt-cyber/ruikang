@@ -29,11 +29,11 @@ public:
     bool is_first_run;
 
     VelocityCtrl() {
-        Kp_yaw = 0.0035f;  
-        Ki_yaw = 0.0003f;  
-        Kd_yaw = 0.0050f;  
+        Kp_yaw = 0.0060f;
+        Ki_yaw = 0.0003f;
+        Kd_yaw = 0.0050f;
 
-        max_vyaw = 0.8f;   
+        max_vyaw = 1.0f;   
         max_error_sum = 1000.0f; 
         reset();
     }
@@ -53,9 +53,9 @@ public:
         }
 
         // 🌟🌟🌟 1. 更新长效记忆 (迟滞区间逻辑) 🌟🌟🌟
-        if (current_offset > 60.0f) {
+        if (current_offset > 40.0f) {
             turn_memory = 300.0f;  // 确认为右大弯，死死记住
-        } else if (current_offset < -60.0f) {
+        } else if (current_offset < -40.0f) {
             turn_memory = -300.0f; // 确认为左大弯，死死记住
         } else if (std::abs(current_offset) < 20.0f) {
             turn_memory = 0.0f;    // 只有完美回到直道中心，才允许遗忘！
@@ -92,7 +92,7 @@ public:
 
         // 动态线性滤波
         float abs_off = std::abs(current_offset);
-        float filter_alpha = 0.15f + (0.35f * (abs_off / 150.0f)); 
+        float filter_alpha = 0.25f + (0.30f * (abs_off / 150.0f)); 
         if (filter_alpha > 0.50f) filter_alpha = 0.50f;
 
         smoothed_vyaw = smoothed_vyaw + filter_alpha * (raw_vyaw - smoothed_vyaw);
