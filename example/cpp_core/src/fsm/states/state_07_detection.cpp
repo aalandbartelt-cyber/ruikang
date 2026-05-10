@@ -35,6 +35,7 @@ void State07Detection::enter(StateMachine* sm) {
     phase_start_      = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
     prev_offset_      = 0.0f;
+    sharp_turn_ticks_ = 0;
     post_turn_backup_done_ = false;
 }
 
@@ -85,16 +86,20 @@ void State07Detection::execute(StateMachine* sm) {
         auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
-        // ★ 急弯恢复检测：刚出大弯且没退过 → 后退2.5s看清下一个弯
-        if (!post_turn_backup_done_ &&
-            std::abs(prev_offset_) > 30.0f &&
-            std::abs(line_offset)  < 10.0f) {
-            std::cout << "[FSM] 🔙 急弯恢复，后退 2.5s 拉远视角" << std::endl;
-            phase_       = Phase::POST_TURN_BACKUP;
-            phase_start_ = now;
-            sm->robot_driver->move(0, 0, 0);
-            prev_offset_ = line_offset;
-            return;
+        // ★ 急弯恢复检测：|offset|>60 持续>15帧（真急弯）→ 恢复时后退
+        if (std::abs(line_offset) > 60.0f) {
+            sharp_turn_ticks_++;
+        } else if (std::abs(line_offset) < 10.0f) {
+            if (!post_turn_backup_done_ && sharp_turn_ticks_ > 15) {
+                std::cout << "[FSM] 🔙 急弯恢复 (持续" << sharp_turn_ticks_
+                          << "帧)，后退 2.5s 拉远视角" << std::endl;
+                phase_       = Phase::POST_TURN_BACKUP;
+                phase_start_ = now;
+                sm->robot_driver->move(0, 0, 0);
+                sharp_turn_ticks_ = 0;
+                return;
+            }
+            sharp_turn_ticks_ = 0;
         }
         prev_offset_ = line_offset;
 
@@ -118,10 +123,11 @@ void State07Detection::execute(StateMachine* sm) {
             phase_start_            = now;
             post_turn_backup_done_  = true;
             prev_offset_            = 0.0f;
+            sharp_turn_ticks_       = 0;
             return;
         }
 
-        sm->robot_driver->move(-0.06f, 0, 0);
+        sm->robot_driver->move(-0.12f, 0, 0);
 
         if (++log_tick_ % 20 == 0) {
             std::cout << "[检测][BACKUP] 退后拉视角 " << dt_phase << "s / 2.5s" << std::endl;
