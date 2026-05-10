@@ -216,8 +216,8 @@ void State04Stairs::execute(StateMachine* sm) {
             return;
         }
 
-        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s04::EXIT_FOLLOW_VX);
-        sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
+        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
+        sm->robot_driver->move(config::s04::EXIT_FOLLOW_VX, 0, vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[台阶][EXIT] 寻迹离开 " << dt_phase << "s / "

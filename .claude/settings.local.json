@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where python *)",
+      "Bash(where python3 *)",
+      "Read(//c/Users/mary3/AppData/Local/Programs/Python//**)",
+      "Bash(ls /c/Python*/)",
+      "Read(//c/Program Files/**)",
+      "Bash(\"/c/Users/mary3/AppData/Local/Python/bin/python.exe\" -c \"print\\('Python works'\\)\")",
+      "Bash(/c/Users/mary3/AppData/Local/Python/bin/python.exe -c ' *)",
+      "Bash(/c/Users/mary3/AppData/Local/Python/bin/python.exe \"D:/上海大学__/26睿抗足式机器人/校赛决赛/第四次测试5.1/ruikang-go2-inspection/example/test/test_state07_warning_signs.py\")",
+      "Bash(/c/Users/mary3/AppData/Local/Python/bin/python.exe \"D:/上海大学__/26睿抗足式机器人/校赛决赛/第四次测试5.1/ruikang-go2-inspection/example/test/test_state09_10.py\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git commit -m ' *)",
+      "WebSearch",
+      "Bash(git add *)",
+      "Bash(git push *)"
+    ]
+  }
+}
