@@ -106,7 +106,7 @@ namespace s03 {
 // =====================================================
 namespace s04 {
     // ===== APPROACH：寻迹靠近 =====
-    constexpr float APPROACH_VX = 0.08f;
+    constexpr float APPROACH_VX = 0.25f;  // 灵动步态下需要较高速度才能动
 
     // ===== ALIGN_ARUCO：对齐台阶 =====
     constexpr float ALIGN_TIMEOUT        = 3.0f;   // 对齐最长等待时间 (s)
@@ -114,16 +114,12 @@ namespace s04 {
     constexpr float ALIGN_VYAW           = 0.25f;  // 对齐转速
     constexpr int   IMAGE_CENTER_X       = 320;    // 图像宽度一半（640x480）
 
-    // ===== CLIMB：爬台阶 =====
-    constexpr float CLIMB_VX             = 0.06f;  // 爬台阶速度 (m/s)
-    constexpr float CLIMB_UP_DURATION    = 5.0f;   // 上台阶时长 (s)，需 5.10 标定
-    constexpr float CLIMB_DOWN_DURATION  = 5.0f;   // 下台阶时长 (s)，需 5.10 标定
-
-    // ===== TOP_TURN_LEFT：台阶顶部左转 90° =====
-    // 翻越式台阶：上到顶部后左转 90° 对准下台阶方向
-    constexpr float TOP_TURN_VX     = 0.0f;        // 原地转
-    constexpr float TOP_TURN_VYAW   = 0.50f;       // 转弯角速度 (rad/s)
-    constexpr float TOP_TURN_TARGET = 1.5708f;     // 目标 90°（弧度）
+    // ===== CLIMB_ARC：弧线连贯上下台阶 =====
+    // 狗尺寸大无法四腿站第三阶，上到第二阶后边前进边左转画弧
+    // 单一连贯动作替代原来的 上台阶→顶部转90°→下台阶
+    constexpr float CLIMB_ARC_VX       = 0.05f;   // 弧线前进速度 (m/s)，慢速保稳
+    constexpr float CLIMB_ARC_VYAW     = 0.12f;   // 弧线左转角速度 (rad/s)，12s≈82°
+    constexpr float CLIMB_ARC_DURATION = 12.0f;   // 弧线总时长 (s)，需现场标定
 
     // ===== EXIT_FOLLOW：离开台阶 =====
     constexpr float EXIT_FOLLOW_VX       = 0.18f;

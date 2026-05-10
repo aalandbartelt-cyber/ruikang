@@ -1,12 +1,11 @@
 // src/fsm/states/state_04_stairs.cpp
 // State04: 上下台阶（ArUco 辅助定位 + 步态切换）
-// 翻越式：上台阶 → 顶部左转 90° → 下台阶 → 继续寻迹
 //
-// vs 骨架版的修正：
-//   1. 加全局超时检查（防卡死）
-//   2. ALIGN_ARUCO 闭环对齐（aruco_center_x）
-//   3. SWITCH_GAIT 已接通 RobotDriver::setGait()
-//   4. 新增 TOP_TURN_LEFT（上完台阶后左转 90°）
+// V5.10 改动：
+//   - 上下台阶改为弧线连贯动作（前进+左转画弧），替换原三段式
+//   - 原因：狗尺寸大无法四腿全站第三阶，上第二阶后边前进边左转
+//   - 巡线速度提升到 0.25（灵动步态下需要更高速度）
+//   - 保留 SWITCH_GAIT_DOWN（灵动→经典）
 // =====================================================
 #include "fsm/states/state_04_stairs.hpp"
 #include "fsm/states/state_07_detection.hpp"
@@ -20,10 +19,9 @@ namespace fsm {
 
 void State04Stairs::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_04: 台阶区" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH → ALIGN → 上台阶 → 顶部左转90° → 下台阶 → 灵动→经典 → EXIT (State03已是灵动步态)" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH → ALIGN → CLIMB_ARC(弧线上下台阶) → 灵动→经典 → EXIT" << std::endl;
 
     phase_            = Phase::APPROACH;
-    accumulated_yaw_  = 0.0f;
     log_tick_         = 0;
     phase_start_      = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
@@ -83,7 +81,7 @@ void State04Stairs::execute(StateMachine* sm) {
         if (dt_phase > config::s04::ALIGN_TIMEOUT) {
             std::cout << "[FSM] ⏰ 对齐超时 (" << dt_phase
                       << "s)，直接上台阶" << std::endl;
-            phase_       = Phase::CLIMB_UP;
+            phase_       = Phase::CLIMB_ARC;
             phase_start_ = now;
             sm->robot_driver->move(0, 0, 0);
             return;
@@ -95,7 +93,7 @@ void State04Stairs::execute(StateMachine* sm) {
             std::cout << "[FSM] ✅ ArUco 对齐完成 (cx=" << cx
                       << " error=" << error_x << "px)" << std::endl;
             sm->robot_driver->move(0, 0, 0);
-            phase_       = Phase::CLIMB_UP;
+            phase_       = Phase::CLIMB_ARC;
             phase_start_ = now;
             return;
         } else {
@@ -113,76 +111,30 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 3：CLIMB_UP — 上台阶（State03已是灵动步态，无需切步态）
+    // 阶段 3：CLIMB_ARC — 弧线连贯上下台阶（前进 + 左转画弧）
     // ================================================================
-    if (phase_ == Phase::CLIMB_UP) {
-        if (dt_phase > config::s04::CLIMB_UP_DURATION) {
-            std::cout << "[FSM] ✅ 上台阶完成 (" << dt_phase << "s)" << std::endl;
-            phase_            = Phase::TOP_TURN_LEFT;  // ★ → 顶部左转 90°
-            accumulated_yaw_  = 0.0f;
-            phase_start_      = now;
-            sm->robot_driver->move(0, 0, 0);
-            return;
-        }
-
-        sm->robot_driver->move(config::s04::CLIMB_VX, 0, 0);
-
-        if (++log_tick_ % 30 == 0) {
-            std::cout << "[台阶][CLIMB_UP] " << dt_phase << "s / "
-                      << config::s04::CLIMB_UP_DURATION << "s"
-                      << "  DF=" << depth_front << std::endl;
-        }
-        return;
-    }
-
-    // ================================================================
-    // 阶段 5：TOP_TURN_LEFT — 台阶顶部左转 90°
-    // ================================================================
-    if (phase_ == Phase::TOP_TURN_LEFT) {
-        float vyaw_mag    = config::s04::TOP_TURN_VYAW;
-        accumulated_yaw_  = dt_phase * vyaw_mag;  // dt 方式，与 state_03 一致
-
-        if (accumulated_yaw_ >= config::s04::TOP_TURN_TARGET) {
-            std::cout << "[FSM] ✅ 顶部左转 90° 完成 ("
-                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°)" << std::endl;
-            phase_       = Phase::CLIMB_DOWN;
-            phase_start_ = now;
-            sm->robot_driver->move(0, 0, 0);
-            return;
-        }
-
-        sm->robot_driver->move(config::s04::TOP_TURN_VX, 0, vyaw_mag);
-
-        if (++log_tick_ % 10 == 0) {
-            std::cout << "[台阶][TOP_TURN] 左转中... "
-                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "° / 90°" << std::endl;
-        }
-        return;
-    }
-
-    // ================================================================
-    // 阶段 6：CLIMB_DOWN — 下台阶
-    // ================================================================
-    if (phase_ == Phase::CLIMB_DOWN) {
-        if (dt_phase > config::s04::CLIMB_DOWN_DURATION) {
-            std::cout << "[FSM] ✅ 下台阶完成 (" << dt_phase << "s)" << std::endl;
+    if (phase_ == Phase::CLIMB_ARC) {
+        if (dt_phase > config::s04::CLIMB_ARC_DURATION) {
+            std::cout << "[FSM] ✅ 弧线上下台阶完成 (" << dt_phase << "s) → 切回经典步态" << std::endl;
             phase_       = Phase::SWITCH_GAIT_DOWN;
             phase_start_ = now;
             sm->robot_driver->move(0, 0, 0);
             return;
         }
 
-        sm->robot_driver->move(config::s04::CLIMB_VX, 0, 0);
+        sm->robot_driver->move(config::s04::CLIMB_ARC_VX, 0, config::s04::CLIMB_ARC_VYAW);
 
         if (++log_tick_ % 30 == 0) {
-            std::cout << "[台阶][CLIMB_DOWN] " << dt_phase << "s / "
-                      << config::s04::CLIMB_DOWN_DURATION << "s" << std::endl;
+            std::cout << "[台阶][CLIMB_ARC] 弧线中... " << dt_phase << "s / "
+                      << config::s04::CLIMB_ARC_DURATION << "s"
+                      << " vx=" << config::s04::CLIMB_ARC_VX
+                      << " vyaw=" << config::s04::CLIMB_ARC_VYAW << std::endl;
         }
         return;
     }
 
     // ================================================================
-    // 阶段 7：SWITCH_GAIT_DOWN — 灵动 → 经典
+    // 阶段 4：SWITCH_GAIT_DOWN — 灵动 → 经典
     // ================================================================
     if (phase_ == Phase::SWITCH_GAIT_DOWN) {
         std::cout << "[FSM] 🦿 步态恢复: 灵动 → 经典" << std::endl;
@@ -194,7 +146,7 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 8：EXIT_FOLLOW — 继续寻迹，离开台阶区域
+    // 阶段 5：EXIT_FOLLOW — 继续寻迹，离开台阶区域
     // ================================================================
     if (phase_ == Phase::EXIT_FOLLOW) {
         if (dt_phase > config::s04::EXIT_FOLLOW_DURATION) {
