@@ -15,15 +15,19 @@ public:
 
 private:
     enum class Phase {
-        APPROACH,          // 寻迹直行 + ArUco center_y 判断靠近
+        APPROACH,          // 巡线直行 + ArUco center_y 判断靠近
         ALIGN_ARUCO,       // 对齐台阶中心
-        CLIMB_ARC,         // ★ 弧线连贯上下台阶（前进+左转画弧）
-        SWITCH_GAIT_DOWN,  // 切回步态：灵动 → 经典
-        EXIT_FOLLOW,       // 继续寻迹，等待离开台阶区域
+        CLIMB_UP,          // 直爬1s上台阶
+        CLIMB_ARC,         // 弧线前进+左转 90°
+        CLIMB_DOWN,        // 直下1s
+        EXIT_FOLLOW,       // 巡线离开（先巡3s再切步态）
         FINISHED
     };
 
     Phase phase_ = Phase::APPROACH;
+
+    float accumulated_yaw_ = 0.0f;  // CLIMB_ARC 角度累计
+    bool  gait_switched_   = false; // EXIT_FOLLOW 中是否已切步态
 
     std::chrono::steady_clock::time_point phase_start_;
     std::chrono::steady_clock::time_point state_enter_time_;

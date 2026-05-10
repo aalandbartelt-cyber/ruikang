@@ -14,38 +14,38 @@ namespace s02 {
     // ===== 寻迹基础速度 =====
     constexpr float CRUISE_VX = 0.08f;
     constexpr float SLOW_VX   = 0.06f;
-    
+
     // ===== 加速段忽略 ticks =====
     constexpr int ACCEL_IGNORE_TICKS = 0;
-    
+
     // ===== 物理参考量（注释用，便于复算） =====
     constexpr float D_JUMP_REACH        = 1.03f;
     constexpr float DOG_HALF_LENGTH     = 0.30f;
     constexpr float TARGET_FOOT_TO_OBS  = 0.165f;
-    
+
     // ===== ★ 核心触发距离 ★ =====
     // 5.1 现场标定值：D_JUMP_TRIGGER = 0.40m 时 d_stop ≈ 16cm，完美
     constexpr float D_JUMP_TRIGGER = 0.40f;
-    
+
     // ===== 跳跃前后时序 =====
     constexpr float BRAKE_BEFORE_JUMP  = 0.8f;
     constexpr float RECOVER_AFTER_JUMP = 0.8f;
-    
+
     // ===== ★ 新增：跳跃后寻迹阶段参数 ★ =====
     // 跳跃后至少寻迹这么多 ticks 才考虑切走（防落地抖动误触）
     // 100 ticks × 10ms = 1 秒
     constexpr int POST_JUMP_MIN_TICKS = 100;
-    
+
     // 视觉端"无线"判定阈值：
     //   - 若 Y 视觉无线时返回特殊值（如 999），改成 > 500
     //   - 若 Y 视觉无线时返回大幅 offset，用 200 即可
     //   ⚠️ 5.1 现场需和 Y 视觉端约定，先用 200 占位
     constexpr float NO_LINE_OFFSET_THRESH = 120.0f;
-    
+
     // 连续多少帧"无线"才认定走完黑线
     // 50 ticks × 10ms = 0.5 秒
     constexpr int NO_LINE_TICKS_TO_EXIT = 50;
-    
+
     // 兜底超时：跳跃后寻迹超过这么多 ticks 强制退出（避免视觉异常导致死循环）
     // 1500 ticks × 10ms = 15 秒
     constexpr int POST_JUMP_TIMEOUT_TICKS = 1500;
@@ -100,9 +100,10 @@ namespace s03 {
     // 如果 depth_front >= 9.0m，认为是 D435i 数据缺失，忽略
     constexpr float DEPTH_MAX_VALID = 9.0f;
 }
+
 // =====================================================
 // State04: 台阶区（ArUco 辅助定位 + 步态切换）
-// 流程：寻迹→检测ArUco→对齐→切步态→上台阶→下台阶→切回步态→继续寻迹
+// 流程：巡线→ArUco靠近→对齐→直爬1s→弧线转90°→直下1s→巡线3s→切步态→巡线
 // =====================================================
 namespace s04 {
     // ===== APPROACH：寻迹靠近 =====
@@ -110,7 +111,7 @@ namespace s04 {
 
     // ===== ArUco 靠近判断：center_y 超过此阈值认为已走近台阶 =====
     // 前摄 640×480，ArUco 远时 cy≈240，越近越靠下(cy↑)
-    constexpr float ARUCO_NEAR_Y_THRESHOLD = 350.0f;  // cy>350 认为靠近，需现场标定
+    constexpr float ARUCO_NEAR_Y_THRESHOLD = 860.0f;  // 5.10现场标定
 
     // ===== ALIGN_ARUCO：对齐台阶 =====
     constexpr float ALIGN_TIMEOUT        = 3.0f;   // 对齐最长等待时间 (s)
@@ -118,16 +119,23 @@ namespace s04 {
     constexpr float ALIGN_VYAW           = 0.25f;  // 对齐转速
     constexpr int   IMAGE_CENTER_X       = 320;    // 图像宽度一半（640x480）
 
-    // ===== CLIMB_ARC：弧线连贯上下台阶 =====
-    // 狗尺寸大无法四腿站第三阶，上到第二阶后边前进边左转画弧
-    // 单一连贯动作替代原来的 上台阶→顶部转90°→下台阶
-    constexpr float CLIMB_ARC_VX       = 0.42f;   // 弧线前进速度 (m/s)
-    constexpr float CLIMB_ARC_VYAW     = 0.18f;   // 弧线左转角速度 (rad/s)，8s≈82°
-    constexpr float CLIMB_ARC_DURATION = 8.0f;    // 弧线总时长 (s)，需现场标定
+    // ===== CLIMB_UP：直爬1s上台阶 =====
+    constexpr float CLIMB_UP_VX       = 0.50f;   // 直爬速度 (m/s)
+    constexpr float CLIMB_UP_DURATION = 1.0f;    // 直爬时长 (s)
+
+    // ===== CLIMB_ARC：弧线边走边左转 90° =====
+    constexpr float CLIMB_ARC_VX     = 0.50f;     // 弧线前进速度 (m/s)
+    constexpr float CLIMB_ARC_VYAW   = 0.23f;     // 弧线左转角速度 (rad/s)
+    constexpr float CLIMB_ARC_TARGET = 1.5708f;   // 目标 90°
+
+    // ===== CLIMB_DOWN：直下1s =====
+    constexpr float CLIMB_DOWN_VX       = 0.50f;   // 直下速度 (m/s)
+    constexpr float CLIMB_DOWN_DURATION = 1.0f;    // 直下时长 (s)
 
     // ===== EXIT_FOLLOW：离开台阶 =====
     constexpr float EXIT_FOLLOW_VX       = 0.18f;
     constexpr float EXIT_FOLLOW_DURATION = 15.0f;
+    constexpr float GAIT_SWITCH_DELAY    = 3.0f;   // 巡线3s后再切回经典步态
 
     // ===== 安全保护 =====
     constexpr float TOTAL_TIMEOUT = 60.0f;
@@ -220,7 +228,7 @@ namespace s10 {
 namespace debug {
     // true: 详细打印里程 / 雷达数据；false: 只打印关键事件
     constexpr bool VERBOSE_LOG = true;
-    
+
     // true: 不下发跳跃指令，只打印日志（dry-run，标定 D_JUMP_TRIGGER 用）
     constexpr bool DRY_RUN_NO_JUMP = false;
 }
