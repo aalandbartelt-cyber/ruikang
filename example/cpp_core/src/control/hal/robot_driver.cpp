@@ -141,8 +141,8 @@ void RobotDriver::setGait(GaitType gait) {
         std::cout << "[RobotDriver] 切换至 CLASSIC（经典）步态" << std::endl;
         sport_client->ClassicWalk(true);
     } else if (gait == GaitType::GAIT_AGILE) {
-        std::cout << "[RobotDriver] 切换至 AGILE（灵动/Economic）步态" << std::endl;
-        sport_client->EconomicGait();
+        std::cout << "[RobotDriver] 切换至 AGILE（灵动/Free）步态" << std::endl;
+        sport_client->ClassicWalk(false);  // 退出经典 = 回到 Free/Agile 模式
     }
 }
 

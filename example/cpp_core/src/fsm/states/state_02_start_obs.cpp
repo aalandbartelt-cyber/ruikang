@@ -95,7 +95,8 @@ void State02StartObs::execute(StateMachine* sm) {
         }
         // C.3 切换阶段
         else {
-            std::cout << "[FSM] ✅ 5°微调完成，切换步态: 经典→灵动，切入 STATE_03" << std::endl;
+            std::cout << "[FSM] ✅ 5°微调完成，刹车→切换步态: 经典→灵动，切入 STATE_03" << std::endl;
+            sm->robot_driver->move(0, 0, 0);  // 先刹车，清除残余 Move 指令
             sm->robot_driver->setGait(ruikang::control::GaitType::GAIT_AGILE);
             sm->changeState(new State03Avoidance());
             return;
