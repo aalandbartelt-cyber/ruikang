@@ -83,8 +83,11 @@ void State07Detection::execute(StateMachine* sm) {
         // 弯道预判：turn_trend叠加offset提前转弯（D435i 45°前倾视距短）
         float trend = sm->vision_data.turn_trend;
         float effective_offset = line_offset;
-        if (std::abs(trend) > 40.0f) {
-            effective_offset = line_offset + trend * 1.5f;
+        if (std::abs(trend) > 30.0f) {
+            float boost = trend * 0.8f;
+            if (boost > 80.0f)  boost = 80.0f;
+            if (boost < -80.0f) boost = -80.0f;
+            effective_offset = line_offset + boost;
         }
         auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
@@ -114,8 +117,11 @@ void State07Detection::execute(StateMachine* sm) {
         // 弯道预判：turn_trend叠加offset提前转弯
         float trend = sm->vision_data.turn_trend;
         float effective_offset = line_offset;
-        if (std::abs(trend) > 40.0f) {
-            effective_offset = line_offset + trend * 1.5f;
+        if (std::abs(trend) > 30.0f) {
+            float boost = trend * 0.8f;
+            if (boost > 80.0f)  boost = 80.0f;
+            if (boost < -80.0f) boost = -80.0f;
+            effective_offset = line_offset + boost;
         }
         auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
