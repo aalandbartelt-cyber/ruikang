@@ -192,8 +192,8 @@ namespace s04 {
     constexpr float TOP_TURN_TARGET = 1.5708f;     // 目标 90°（弧度）
 
     // ===== EXIT_FOLLOW：离开台阶 =====
-    constexpr float EXIT_FOLLOW_VX       = 0.08f;
-    constexpr float EXIT_FOLLOW_DURATION = 3.0f;
+    constexpr float EXIT_FOLLOW_VX       = 0.18f;
+    constexpr float EXIT_FOLLOW_DURATION = 15.0f;
 
     // ===== 安全保护 =====
     constexpr float TOTAL_TIMEOUT = 60.0f;
