@@ -108,6 +108,9 @@ namespace s04 {
     // ===== APPROACH：寻迹靠近 =====
     constexpr float APPROACH_VX = 0.25f;  // 灵动步态下需要较高速度才能动
 
+    // ===== MOVE_TO_STAIRS：检测到ArUco后盲走靠近 =====
+    constexpr float ARUCO_FORWARD_DURATION = 2.0f;  // 看到ArUco后继续盲走时间 (s)
+
     // ===== ALIGN_ARUCO：对齐台阶 =====
     constexpr float ALIGN_TIMEOUT        = 3.0f;   // 对齐最长等待时间 (s)
     constexpr float ALIGN_CENTER_TOL_PX  = 30.0f;  // ArUco 中心偏差容忍（像素）

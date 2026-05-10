@@ -19,7 +19,7 @@ namespace fsm {
 
 void State04Stairs::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_04: 台阶区" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH → ALIGN → CLIMB_ARC(弧线上下台阶) → 灵动→经典 → EXIT" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH → MOVE_TO_STAIRS(盲走近台阶) → ALIGN → CLIMB_ARC → 灵动→经典 → EXIT" << std::endl;
 
     phase_            = Phase::APPROACH;
     log_tick_         = 0;
@@ -52,9 +52,9 @@ void State04Stairs::execute(StateMachine* sm) {
     // ================================================================
     if (phase_ == Phase::APPROACH) {
         if (aruco_detected) {
-            std::cout << "[FSM] 🎯 检测到 ArUco！进入对齐" << std::endl;
+            std::cout << "[FSM] 🎯 检测到 ArUco！盲走靠近台阶 (" << config::s04::ARUCO_FORWARD_DURATION << "s)" << std::endl;
             sm->robot_driver->move(0, 0, 0);
-            phase_       = Phase::ALIGN_ARUCO;
+            phase_       = Phase::MOVE_TO_STAIRS;
             phase_start_ = now;
             return;
         }
@@ -70,7 +70,28 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 2：ALIGN_ARUCO — 对齐台阶中心
+    // 阶段 2：MOVE_TO_STAIRS — 检测到 ArUco 后盲走靠近台阶
+    // ================================================================
+    if (phase_ == Phase::MOVE_TO_STAIRS) {
+        if (dt_phase > config::s04::ARUCO_FORWARD_DURATION) {
+            std::cout << "[FSM] ✅ 盲走靠近完成 (" << dt_phase << "s) → 对齐台阶" << std::endl;
+            phase_       = Phase::ALIGN_ARUCO;
+            phase_start_ = now;
+            sm->robot_driver->move(0, 0, 0);
+            return;
+        }
+
+        sm->robot_driver->move(config::s04::APPROACH_VX, 0, 0);
+
+        if (++log_tick_ % 20 == 0) {
+            std::cout << "[台阶][MOVE] 盲走近台阶 " << dt_phase << "s / "
+                      << config::s04::ARUCO_FORWARD_DURATION << "s" << std::endl;
+        }
+        return;
+    }
+
+    // ================================================================
+    // 阶段 3：ALIGN_ARUCO — 对齐台阶中心
     // ================================================================
     if (phase_ == Phase::ALIGN_ARUCO) {
         float cx      = sm->vision_data.aruco_center_x;
@@ -110,7 +131,7 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 3：CLIMB_ARC — 弧线连贯上下台阶（前进 + 左转画弧）
+    // 阶段 4：CLIMB_ARC — 弧线连贯上下台阶（前进 + 左转画弧）
     // ================================================================
     if (phase_ == Phase::CLIMB_ARC) {
         if (dt_phase > config::s04::CLIMB_ARC_DURATION) {
@@ -133,7 +154,7 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 4：SWITCH_GAIT_DOWN — 灵动 → 经典
+    // 阶段 5：SWITCH_GAIT_DOWN — 灵动 → 经典
     // ================================================================
     if (phase_ == Phase::SWITCH_GAIT_DOWN) {
         std::cout << "[FSM] 🦿 步态恢复: 灵动 → 经典" << std::endl;
@@ -145,7 +166,7 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 5：EXIT_FOLLOW — 继续寻迹，离开台阶区域
+    // 阶段 6：EXIT_FOLLOW — 继续寻迹，离开台阶区域
     // ================================================================
     if (phase_ == Phase::EXIT_FOLLOW) {
         if (dt_phase > config::s04::EXIT_FOLLOW_DURATION) {
