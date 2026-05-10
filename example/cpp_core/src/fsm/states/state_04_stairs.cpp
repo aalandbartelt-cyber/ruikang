@@ -20,7 +20,7 @@ namespace fsm {
 
 void State04Stairs::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_04: 台阶区" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH → ALIGN → 经典→灵动 → 上台阶 → 顶部左转90° → 下台阶 → 灵动→经典 → EXIT" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH → ALIGN → 上台阶 → 顶部左转90° → 下台阶 → 灵动→经典 → EXIT (State03已是灵动步态)" << std::endl;
 
     phase_            = Phase::APPROACH;
     accumulated_yaw_  = 0.0f;
@@ -82,8 +82,8 @@ void State04Stairs::execute(StateMachine* sm) {
         // 超时保护
         if (dt_phase > config::s04::ALIGN_TIMEOUT) {
             std::cout << "[FSM] ⏰ 对齐超时 (" << dt_phase
-                      << "s)，进入步态切换" << std::endl;
-            phase_       = Phase::SWITCH_GAIT_UP;
+                      << "s)，直接上台阶" << std::endl;
+            phase_       = Phase::CLIMB_UP;
             phase_start_ = now;
             sm->robot_driver->move(0, 0, 0);
             return;
@@ -95,7 +95,7 @@ void State04Stairs::execute(StateMachine* sm) {
             std::cout << "[FSM] ✅ ArUco 对齐完成 (cx=" << cx
                       << " error=" << error_x << "px)" << std::endl;
             sm->robot_driver->move(0, 0, 0);
-            phase_       = Phase::SWITCH_GAIT_UP;
+            phase_       = Phase::CLIMB_UP;
             phase_start_ = now;
             return;
         } else {
@@ -113,19 +113,7 @@ void State04Stairs::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 3：SWITCH_GAIT_UP — 经典 → 灵动
-    // ================================================================
-    if (phase_ == Phase::SWITCH_GAIT_UP) {
-        std::cout << "[FSM] 🦿 步态切换: 经典 → 灵动" << std::endl;
-        sm->robot_driver->setGait(ruikang::control::GaitType::GAIT_AGILE);
-        phase_       = Phase::CLIMB_UP;
-        phase_start_ = now;
-        sm->robot_driver->move(0, 0, 0);
-        return;
-    }
-
-    // ================================================================
-    // 阶段 4：CLIMB_UP — 上台阶
+    // 阶段 3：CLIMB_UP — 上台阶（State03已是灵动步态，无需切步态）
     // ================================================================
     if (phase_ == Phase::CLIMB_UP) {
         if (dt_phase > config::s04::CLIMB_UP_DURATION) {

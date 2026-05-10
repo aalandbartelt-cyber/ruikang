@@ -52,119 +52,53 @@ namespace s02 {
 }
 
 // =====================================================
-// State03: 避障区（D435i 深度相机方案 V3.2）
-//
-// V3.1 → V3.2 改动：
-//   - 侧向开口"三道门禁"概念显式标注，参数本身不变
-//   - 准备 5.9 现场对照测试（删 5° vs 保留 5°）
+// State03: 避障区（D435i 深度相机方案）
+// 物理基线：D435i 前倾约 45°
+//   - 无障碍：看到地面，距离 ≈ 0.66m
+//   - 有障碍：距离突然 < 0.50m
 // =====================================================
 namespace s03 {
     // ===== 直行参数 =====
-    constexpr float CRUISE_VX = 0.12f;
-    constexpr float SLOW_VX   = 0.06f;   // 接近障碍时减速
+    constexpr float CRUISE_VX = 0.50f;
+
 
     // ===== 避障核心阈值 =====
-    constexpr float TURN_TRIGGER_DIST  = 0.45f;  // 前向触发
-    constexpr float TURN_WARNING_DIST  = 0.50f;  // 减速阈值
+    constexpr float TURN_TRIGGER_DIST = 0.40f;
 
-    // 前向触发：连续帧数确认（防单帧抖动）
-    constexpr int CONFIRM_FRAMES = 5;
-
-    // ===== 深度滑动窗口滤波 =====
-    constexpr int DEPTH_SMOOTH_WINDOW = 5;       // 5 帧移动平均
-
-    // ===== 侧向开口提前触发：三道门禁 =====
-    //
-    // 门禁 1（空间）：前向必须接近 → 屏蔽入口空旷区误触发
-    constexpr float SIDE_GAP_FRONT_MAX = 0.55f;
-    //
-    // 门禁 2（时间）：直行已走过最低时间 → 屏蔽姿态未稳误触发
-    constexpr float SIDE_GAP_MIN_STRAIGHT_TIME = 1.0f;
-    //
-    // 门禁 3（频次）：侧向开口需连续 N 帧确认 → 抗深度跳变误触发
-    constexpr int   SIDE_GAP_CONFIRM_FRAMES = 3;
-    //
-    // 阈值：侧向距离单帧跃升超过此值即视为"看到开口"
-    constexpr float SIDE_GAP_THRESHOLD = 0.25f;
+    // 连续帧数确认（防止单帧抖动误触）
+    constexpr int CONFIRM_FRAMES = 5;  // 5 帧 ≈ 50ms
 
     // ===== 阿克曼转弯参数 =====
     constexpr float TURN_VX     = 0.10f;
     constexpr float TURN_VYAW   = 0.60f;
-
-    // ===== 8 次转弯目标角度（弧度） =====
-    constexpr float TURN_TARGETS[8] = {
-        1.5708f,  // 第1次：90°
-        1.5708f,  // 第2次：90°
-        0.8650f,  // 第3次：~49°
-        0.2000f,  // 第4次：~11°（修正偏角）
-        1.5708f,  // 第5次：90°
-        1.0470f,  // 第6次：60°
-        0.7500f,  // 第7次：~43°（修正偏角）
-        1.5708f   // 第8次：90°
+    // ===== 5 次转弯的目标角度数组（弧度制） =====
+    constexpr float TURN_TARGETS[5] = {
+        1.5708f,  // 第 1 次：90度
+        1.6708f,  // 第 2 次：90度
+        1.9708f,  // 第 5 次：90度
+        2.3708f,  // 第 6 次：60度
+        1.9708f   // 第 8 次：90度
     };
 
-    constexpr bool TURN_DIRECTIONS[8] = {
-        true, true, true, true,    // 4 次左
-        false, false, false,       // 3 次右
-        true                       // 最后 1 次左
-    };
-    constexpr int TOTAL_TURNS = 8;
+    // ===== 5 次转弯方向（左左右右左） =====
+    constexpr bool TURN_DIRECTIONS[5] = {true, true,  false, false,  true};
+    constexpr int  TOTAL_TURNS = 5;
 
-    // 每段独立转弯角速度（小角度需较长时间才能起作用）
-    constexpr float TURN_VYAW_ARRAY[8] = {
-        0.60f, 0.60f, 0.50f, 0.20f,
-        0.60f, 0.50f, 0.30f, 0.60f
-    };
-
-    // 每次转弯后稳定缓冲时间
-    constexpr float STABILIZE_TIMES[8] = {
-        0.3f, 0.3f, 0.4f, 0.5f, 0.4f, 0.4f, 0.5f, 0.4f
-    };
-
-    // ==========================================================
-    // ★ 方向感知姿态修正
-    // ==========================================================
-    constexpr float ENTRY_ALIGN_TARGET     = -0.05f;  // 入口偏左 5cm
-    constexpr float ENTRY_ALIGN_TOLERANCE  = 0.08f;
-    constexpr float ENTRY_ALIGN_VYAW       = 0.30f;
-    constexpr float ENTRY_ALIGN_TIMEOUT    = 1.5f;
-
-    // 每次转弯后的目标偏移：根据下一次转弯方向决定
-    //   下次左转 → 偏左（target<0），给屁股留右侧空间
-    //   下次右转 → 偏右（target>0），给屁股留左侧空间
-    constexpr float POST_TURN_ALIGN_TARGETS[8] = {
-        -0.05f,  // [0] 第1次后 → 第2次左 → 偏左
-        -0.05f,  // [1] 第2次后 → 第3次左 → 偏左
-        -0.05f,  // [2] 第3次后 → 第4次左 → 偏左
-         0.05f,  // [3] 第4次后 → 第5次右 → 偏右
-         0.05f,  // [4] 第5次后 → 第6次右 → 偏右
-         0.05f,  // [5] 第6次后 → 第7次右 → 偏右
-        -0.05f,  // [6] 第7次后 → 第8次左 → 偏左
-         0.00f,  // [7] 第8次后 → 退出，不使用
-    };
-
-    constexpr float POST_TURN_ALIGN_TOLERANCE = 0.08f;
-    constexpr float POST_TURN_ALIGN_VYAW      = 0.25f;
-    constexpr float POST_TURN_ALIGN_TIMEOUT   = 1.0f;
-
-    constexpr bool ENABLE_POST_TURN_ALIGN[8] = {
-        true,   // [0] 第1次后
-        true,   // [1] 第2次后
-        true,   // [2] 第3次后（关键：防第4次微调失效）
-        false,  // [3] 第4次后（本身是微调）
-        true,   // [4] 第5次后
-        true,   // [5] 第6次后
-        true,   // [6] 第7次后
-        false,  // [7] 第8次后（已出区）
+    // ===== 次转弯后的稳定/停顿缓冲时间（秒） =====
+    // 发送速度 0，让机器狗原地踏步恢复重心
+    constexpr float STABILIZE_TIMES[5] = {
+        0.4f,  // 第 1 次转完后
+        0.4f,  // 第 2 次转完后
+        0.4f,  // 第 5 次转完后：这里加长到 0.5 秒，强制恢复重心！
+        0.4f,  // 第 6 次转完后
+        0.4f   // 第 8 次转完后
     };
 
     // ===== 数据有效性检查 =====
+    // 如果 depth_front < 0.10m，认为是数据异常（太近不可能），忽略这帧
     constexpr float DEPTH_MIN_VALID = 0.10f;
+    // 如果 depth_front >= 9.0m，认为是 D435i 数据缺失，忽略
     constexpr float DEPTH_MAX_VALID = 9.0f;
-
-    // ===== 盲走参数 =====
-    constexpr float BLIND_WALK_T4 = 1.95f;
-    constexpr float BLIND_WALK_T5 = 1.65f;
 }
 // =====================================================
 // State04: 台阶区（ArUco 辅助定位 + 步态切换）
