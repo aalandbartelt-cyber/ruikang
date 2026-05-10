@@ -2,15 +2,14 @@
 // State07: 检测平台（警示牌识别 + 指定动作执行）
 //
 // 流程：
-//   APPROACH      → 寻迹直行，等待红点出现
+//   APPROACH      → 寻迹直行（弯后boost 0.5s过双弯），等待红点
 //   MOVE_TO_DOT   → 红点出现后继续巡线逼近（补偿D435i前倾视角）
-//   RED_DOT_ALIGN → 红点居中 → 狗投影精准覆盖检测点
 //   TURN_TO_SIGN  → 原地左转 90° 面向警示牌
-//   BACK_AWAY     → 后退 1s 拉开距离（离警示牌太近）
+//   BACK_AWAY     → 后退 1s 拉开距离
 //   STOP_AND_READ → 停稳，读取 warning_sign 并映射动作
 //   EXECUTE_ACTION→ ActionManager::triggerAction() 非阻塞下发
 //   WAIT_ACTION   → 轮询 ActionManager::isDone()（超时兜底）
-//   TURN_BACK     → 原地右转 90° 回正，面向巡线方向
+//   TURN_BACK     → 原地右转 90° 回正
 //   EXIT_FOLLOW   → 继续巡线，离开检测点
 // =====================================================
 #include "fsm/states/state_07_detection.hpp"
@@ -25,18 +24,20 @@ namespace fsm {
 
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH(双弯补转) → MOVE_TO_DOT(盲巡3.6s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退1s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH(" << config::s07::APPROACH_DURATION
+              << "s,弯后boost过双弯) → MOVE_TO_DOT(盲巡" << config::s07::RED_DOT_FORWARD_DURATION
+              << "s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退"
+              << config::s07::BACK_AWAY_DURATION << "s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
 
     phase_            = Phase::APPROACH;
     action_to_play_   = "";
     accumulated_yaw_  = 0.0f;
     action_mgr_.reset(new ruikang::control::ActionManager(*sm->robot_driver));
     log_tick_         = 0;
+    was_in_turn_      = false;
+    post_turn_boost_  = 0;
     phase_start_      = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
-    sharp_ticks_       = 0;
-    second_turn_dir_   = 0.0f;
-    second_turn_done_  = false;
 }
 
 void State07Detection::execute(StateMachine* sm) {
@@ -59,13 +60,14 @@ void State07Detection::execute(StateMachine* sm) {
 
     // ================================================================
     // 阶段 1：APPROACH — 寻迹直行，等待红点出现
+    // ★ 弯后boost：过完弯50帧(0.5s)内vyaw翻倍，帮助捕捉连续第二个弯
     // ================================================================
     if (phase_ == Phase::APPROACH) {
         bool red_dot_seen = sm->vision_data.red_dot_detected;
 
         // 兜底超时：红点一直没出现
         if (dt_phase > config::s07::APPROACH_DURATION) {
-            std::cout << "[FSM] ⏰ 红点未出现，超时兜底 (寻迹 " << dt_phase << "s) → 左转面向警示牌" << std::endl;
+            std::cout << "[FSM] ⏰ 红点未出现，超时兜底 (巡线 " << dt_phase << "s) → 左转面向警示牌" << std::endl;
             phase_            = Phase::TURN_TO_SIGN;
             accumulated_yaw_  = 0.0f;
             phase_start_      = now;
@@ -83,67 +85,42 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
-        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
+        // ===== 弯后boost逻辑：过完急弯后短暂提高灵敏度 =====
+        if (post_turn_boost_ > 0) {
+            post_turn_boost_--;
+        }
 
-        // 双弯：|offset|>60累积>30帧 → 回正(|offset|<20) → 记录方向 → 硬转90°补第二个弯
-        if (!second_turn_done_ && std::abs(line_offset) > 60.0f) {
-            sharp_ticks_++;
-            second_turn_dir_ = (line_offset > 0) ? -1.0f : 1.0f;  // offset>0需右转(负vyaw)，反则左转
+        // 检测是否进入急弯
+        if (std::abs(line_offset) > 60.0f) {
+            was_in_turn_ = true;
         }
-        if (!second_turn_done_ && sharp_ticks_ > 30 && std::abs(line_offset) < 20.0f) {
-            std::cout << "[FSM] 🔄 第一个弯完成 (弯帧" << sharp_ticks_
-                      << ")，硬转90°补第二个弯" << std::endl;
-            phase_            = Phase::SECOND_TURN;
-            accumulated_yaw_  = 0.0f;
-            phase_start_      = now;
-            sm->robot_driver->move(0, 0, 0);
-            sharp_ticks_ = 0;
-            return;
+        // 弯结束：offset回到20以内 → 启动50帧boost
+        if (was_in_turn_ && std::abs(line_offset) < 20.0f) {
+            was_in_turn_ = false;
+            post_turn_boost_ = 50;  // 0.5s内vyaw翻倍
         }
-        if (std::abs(line_offset) < 20.0f && sharp_ticks_ < 30) {
-            sharp_ticks_ = 0;
+
+        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
+
+        // boost期间vyaw翻倍，提高对第二个弯的响应
+        if (post_turn_boost_ > 0) {
+            vyaw *= 2.0f;
         }
+
+        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][APPROACH] " << dt_phase << "s / "
                       << config::s07::APPROACH_DURATION << "s"
                       << " offset=" << line_offset
+                      << " boost=" << (post_turn_boost_ > 0 ? "ON" : "off")
                       << " red_dot=" << (red_dot_seen ? "YES" : "no") << std::endl;
         }
         return;
     }
 
     // ================================================================
-    // 阶段 2：SECOND_TURN — 第一个弯完成后硬转 90° 补第二个弯
-    // ================================================================
-    if (phase_ == Phase::SECOND_TURN) {
-        float vyaw_mag   = config::s07::TURN_TO_SIGN_VYAW;
-        float target     = config::s07::TURN_TO_SIGN_TARGET;
-        float turn_vyaw  = second_turn_dir_ * vyaw_mag;
-        accumulated_yaw_ = dt_phase * vyaw_mag;
-
-        if (accumulated_yaw_ >= target) {
-            std::cout << "[FSM] ✅ 第二个弯 90° 完成 ("
-                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 继续巡线" << std::endl;
-            sm->robot_driver->move(0, 0, 0);
-            phase_             = Phase::APPROACH;
-            phase_start_       = now;
-            second_turn_done_  = true;
-            return;
-        }
-
-        sm->robot_driver->move(0, 0, turn_vyaw);
-
-        if (++log_tick_ % 10 == 0) {
-            std::cout << "[检测][2ND_TURN] " << (accumulated_yaw_ * 180.0f / 3.14159f)
-                      << "° / 90°" << std::endl;
-        }
-        return;
-    }
-
-    // ================================================================
-    // 阶段 3：MOVE_TO_DOT — 继续巡线逼近红点（补偿 D435i 45°前倾视角）
+    // 阶段 2：MOVE_TO_DOT — 继续巡线逼近红点（补偿 D435i 45°前倾视角）
     // ================================================================
     if (phase_ == Phase::MOVE_TO_DOT) {
         if (dt_phase > config::s07::RED_DOT_FORWARD_DURATION) {
@@ -167,13 +144,12 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 4：RED_DOT_ALIGN — 精确定位：狗投影覆盖红点
+    // 阶段 3：RED_DOT_ALIGN — 精确定位：狗投影覆盖红点
     // ================================================================
     if (phase_ == Phase::RED_DOT_ALIGN) {
         float rx      = sm->vision_data.red_dot_center_x;
         float error_x = rx - config::s07::IMAGE_CENTER_X;
 
-        // 对齐超时保护
         if (dt_phase > config::s07::RED_DOT_ALIGN_TIMEOUT) {
             std::cout << "[FSM] ⏰ 红点对齐超时 (" << dt_phase
                       << "s)，当前误差=" << error_x << "px，继续左转面向警示牌" << std::endl;
@@ -184,7 +160,6 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        // 红点丢失（可能已经走过头）
         if (rx < 0) {
             sm->robot_driver->move(0, 0, 0);
             if (++log_tick_ % 20 == 0) {
@@ -193,7 +168,6 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        // 已在容忍范围内 → 左转面向警示牌！
         if (std::abs(error_x) < config::s07::RED_DOT_CENTER_TOL_PX) {
             std::cout << "[FSM] ✅ 红点对齐完成 (cx=" << rx
                       << " error=" << error_x << "px) → 左转 90° 面向警示牌" << std::endl;
@@ -204,7 +178,6 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        // 闭环对齐：红点偏右 → 狗右转，偏左 → 左转
         float vyaw = (error_x > 0) ? -config::s07::RED_DOT_ALIGN_VYAW
                                    : +config::s07::RED_DOT_ALIGN_VYAW;
         sm->robot_driver->move(0, 0, vyaw);
@@ -217,7 +190,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 5：TURN_TO_SIGN — 原地左转 90° 面向警示牌
+    // 阶段 4：TURN_TO_SIGN — 原地左转 90° 面向警示牌
     // ================================================================
     if (phase_ == Phase::TURN_TO_SIGN) {
         float vyaw_mag   = config::s07::TURN_TO_SIGN_VYAW;
@@ -242,7 +215,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 6：BACK_AWAY — 后退拉开距离（离警示牌太近）
+    // 阶段 5：BACK_AWAY — 后退拉开距离（离警示牌太近）
     // ================================================================
     if (phase_ == Phase::BACK_AWAY) {
         if (dt_phase > config::s07::BACK_AWAY_DURATION) {
@@ -263,7 +236,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 7：STOP_AND_READ — 停稳，读取警示牌识别结果
+    // 阶段 6：STOP_AND_READ — 停稳，读取警示牌识别结果
     // ================================================================
     if (phase_ == Phase::STOP_AND_READ) {
         sm->robot_driver->move(0, 0, 0);
@@ -275,11 +248,9 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        // 读取警示牌
         const std::string& sign = sm->vision_data.warning_sign;
         std::cout << "[FSM] 🔍 警示牌识别结果: " << sign << std::endl;
 
-        // 映射动作
         const char* action = config::s07::action_for_sign(sign);
         if (action) {
             action_to_play_ = action;
@@ -296,7 +267,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 8：EXECUTE_ACTION — 调用 ActionManager 触发动作
+    // 阶段 7：EXECUTE_ACTION — 调用 ActionManager 触发动作
     // ================================================================
     if (phase_ == Phase::EXECUTE_ACTION) {
         std::cout << "[FSM] 🎬 执行动作: " << action_to_play_ << std::endl;
@@ -307,14 +278,12 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 9：WAIT_ACTION — 等待动作完成
+    // 阶段 8：WAIT_ACTION — 等待动作完成
     // ================================================================
     if (phase_ == Phase::WAIT_ACTION) {
         sm->robot_driver->move(0, 0, 0);
 
-        // ★ ActionManager 非阻塞轮询：动作完成立即离开
         if (!action_mgr_->isDone()) {
-            // 兜底超时保护
             if (dt_phase > config::s07::ACTION_TIMEOUT) {
                 std::cout << "[FSM] ⏰ 动作超时 (" << dt_phase << "s)，右转回正" << std::endl;
                 phase_            = Phase::TURN_BACK;
@@ -338,7 +307,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 10：TURN_BACK — 原地右转 90° 回正，面向巡线方向
+    // 阶段 9：TURN_BACK — 原地右转 90° 回正，面向巡线方向
     // ================================================================
     if (phase_ == Phase::TURN_BACK) {
         float vyaw_mag   = config::s07::TURN_BACK_VYAW;
@@ -364,7 +333,7 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 11：EXIT_FOLLOW — 继续巡线，离开检测点
+    // 阶段 10：EXIT_FOLLOW — 继续巡线，离开检测点
     // ================================================================
     if (phase_ == Phase::EXIT_FOLLOW) {
         if (dt_phase > config::s07::EXIT_FOLLOW_DURATION) {

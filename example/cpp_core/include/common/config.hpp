@@ -148,7 +148,7 @@ namespace s04 {
 namespace s07 {
     // ===== APPROACH：寻迹靠近检测点 =====
     constexpr float APPROACH_VX       = 0.18f;   // 巡线速度
-    constexpr float APPROACH_DURATION = 18.0f;   // 寻迹超时 (s)，过弯后长直道需足够时间
+    constexpr float APPROACH_DURATION = 25.0f;   // 寻迹超时 (s)，含90°弯+双急弯+长直道
 
     // ===== RED_DOT_FORWARD：检测到红点后继续巡线逼近（D435i 前倾 45°，需补偿） =====
     constexpr float RED_DOT_FORWARD_DURATION = 3.6f;   // 红点出现后盲巡 3.6s 站到红点上（5.9实测）
