@@ -106,10 +106,11 @@ namespace s03 {
 // =====================================================
 namespace s04 {
     // ===== APPROACH：寻迹靠近 =====
-    constexpr float APPROACH_VX = 0.25f;  // 灵动步态下需要较高速度才能动
+    constexpr float APPROACH_VX = 0.45f;  // 灵动步态下需要较高速度才能动
 
-    // ===== MOVE_TO_STAIRS：检测到ArUco后盲走靠近 =====
-    constexpr float ARUCO_FORWARD_DURATION = 2.0f;  // 看到ArUco后继续盲走时间 (s)
+    // ===== ArUco 靠近判断：center_y 超过此阈值认为已走近台阶 =====
+    // 前摄 640×480，ArUco 远时 cy≈240，越近越靠下(cy↑)
+    constexpr float ARUCO_NEAR_Y_THRESHOLD = 350.0f;  // cy>350 认为靠近，需现场标定
 
     // ===== ALIGN_ARUCO：对齐台阶 =====
     constexpr float ALIGN_TIMEOUT        = 3.0f;   // 对齐最长等待时间 (s)
@@ -120,7 +121,7 @@ namespace s04 {
     // ===== CLIMB_ARC：弧线连贯上下台阶 =====
     // 狗尺寸大无法四腿站第三阶，上到第二阶后边前进边左转画弧
     // 单一连贯动作替代原来的 上台阶→顶部转90°→下台阶
-    constexpr float CLIMB_ARC_VX       = 0.12f;   // 弧线前进速度 (m/s)，灵动步态需>0.10
+    constexpr float CLIMB_ARC_VX       = 0.42f;   // 弧线前进速度 (m/s)
     constexpr float CLIMB_ARC_VYAW     = 0.18f;   // 弧线左转角速度 (rad/s)，8s≈82°
     constexpr float CLIMB_ARC_DURATION = 8.0f;    // 弧线总时长 (s)，需现场标定
 
