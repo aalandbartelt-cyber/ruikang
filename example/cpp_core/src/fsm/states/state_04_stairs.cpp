@@ -46,7 +46,6 @@ void State04Stairs::execute(StateMachine* sm) {
     float dt_phase      = std::chrono::duration<float>(now - phase_start_).count();
     float line_offset   = sm->vision_data.line_offset;
     bool  aruco_detected = sm->vision_data.aruco_detected;
-    float depth_front   = sm->vision_data.depth_front;
 
     // ================================================================
     // 阶段 1：APPROACH — 寻迹直行，等待 ArUco
