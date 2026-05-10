@@ -38,8 +38,9 @@ private:
     float accumulated_yaw_ = 0.0f;  // 转弯角度累积
 
     // 弯后短暂boost：过完急弯后50帧内vyaw翻倍，帮助捕捉连续第二个弯
-    bool was_in_turn_      = false;
-    int  post_turn_boost_  = 0;
+    bool  was_in_turn_     = false;
+    int   post_turn_boost_ = 0;
+    float boost_dir_       = 0.0f;  // 上一次急弯方向（±1），boost期间保底vyaw用
 
     std::chrono::steady_clock::time_point phase_start_;
     std::chrono::steady_clock::time_point state_enter_time_;
