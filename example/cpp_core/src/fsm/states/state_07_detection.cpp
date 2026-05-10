@@ -80,8 +80,8 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
-        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
+        sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][APPROACH] " << dt_phase << "s / "
@@ -105,8 +105,8 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
-        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
+        sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 30 == 0) {
             std::cout << "[检测][MOVE] 逼近红点 " << dt_phase << "s / "
@@ -324,8 +324,8 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        float vyaw = sm->vel_ctrl.computeYaw(line_offset);
-        sm->robot_driver->move(config::s07::EXIT_FOLLOW_VX, 0, vyaw);
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::EXIT_FOLLOW_VX);
+        sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][EXIT] 离开检测点 " << dt_phase << "s / "
