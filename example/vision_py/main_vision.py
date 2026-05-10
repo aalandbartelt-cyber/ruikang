@@ -160,7 +160,8 @@ def main():
 
             if cap_front is not None:
                 ret, frame_front = cap_front.read()
-                if ret:
+                # 👇 换成这行终极防弹判断！
+                if ret and frame_front is not None and frame_front.size > 0:
                     # 识别警示牌
                     raw_sign, _ = process_sign(frame_front)
                     sign_history.append(raw_sign)
