@@ -216,19 +216,13 @@ void State04Stairs::execute(StateMachine* sm) {
             return;
         }
 
-        // 弯道预判：turn_trend叠加offset提前转弯
-        float trend = sm->vision_data.turn_trend;
-        float effective_offset = line_offset;
-        if (std::abs(trend) > 40.0f) {
-            effective_offset = line_offset + trend * 1.5f;
-        }
-        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s04::EXIT_FOLLOW_VX);
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s04::EXIT_FOLLOW_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[台阶][EXIT] 寻迹离开 " << dt_phase << "s / "
                       << config::s04::EXIT_FOLLOW_DURATION << "s"
-                      << " offset=" << line_offset << " trend=" << trend << std::endl;
+                      << " offset=" << line_offset << std::endl;
         }
         return;
     }
