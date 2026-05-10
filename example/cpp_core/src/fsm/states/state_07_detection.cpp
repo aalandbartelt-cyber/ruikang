@@ -86,8 +86,8 @@ void State07Detection::execute(StateMachine* sm) {
         auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
-        // ★ 急弯恢复检测：|offset|>60 持续>15帧（真急弯）→ 恢复时后退
-        if (std::abs(line_offset) > 60.0f) {
+        // ★ 急弯恢复检测：巡线>5s后，|offset|>60持续>15帧 → 恢复时后退一次
+        if (dt_phase > 5.0f && std::abs(line_offset) > 60.0f) {
             sharp_turn_ticks_++;
         } else if (std::abs(line_offset) < 10.0f) {
             if (!post_turn_backup_done_ && sharp_turn_ticks_ > 15) {
