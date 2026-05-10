@@ -35,6 +35,7 @@ void State07Detection::enter(StateMachine* sm) {
     phase_start_      = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
     prev_offset_      = 0.0f;
+    straight_ticks_   = 0;
     sharp_turn_ticks_ = 0;
     post_turn_backup_done_ = false;
 }
@@ -86,9 +87,12 @@ void State07Detection::execute(StateMachine* sm) {
         auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
-        // ★ 急弯恢复检测：巡线>5s后，|offset|>60持续>15帧 → 恢复时后退一次
-        if (dt_phase > 5.0f && std::abs(line_offset) > 60.0f) {
-            sharp_turn_ticks_++;
+        // ★ 急弯检测：先稳定直行(10帧|offset|<20) → 入弯(>60持续15帧) → 出弯(<10)后退一次
+        if (std::abs(line_offset) < 20.0f) {
+            if (straight_ticks_ < 20) straight_ticks_++;  // 累计直行帧，上限20
+        }
+        if (std::abs(line_offset) > 60.0f && straight_ticks_ >= 10) {
+            sharp_turn_ticks_++;  // 确认在正轨上后才开始计弯
         } else if (std::abs(line_offset) < 10.0f) {
             if (!post_turn_backup_done_ && sharp_turn_ticks_ > 15) {
                 std::cout << "[FSM] 🔙 急弯恢复 (持续" << sharp_turn_ticks_
@@ -97,6 +101,7 @@ void State07Detection::execute(StateMachine* sm) {
                 phase_start_ = now;
                 sm->robot_driver->move(0, 0, 0);
                 sharp_turn_ticks_ = 0;
+                straight_ticks_   = 0;
                 return;
             }
             sharp_turn_ticks_ = 0;
@@ -123,6 +128,7 @@ void State07Detection::execute(StateMachine* sm) {
             phase_start_            = now;
             post_turn_backup_done_  = true;
             prev_offset_            = 0.0f;
+            straight_ticks_         = 0;
             sharp_turn_ticks_       = 0;
             return;
         }

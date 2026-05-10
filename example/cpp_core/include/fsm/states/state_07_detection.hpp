@@ -41,8 +41,9 @@ private:
     std::chrono::steady_clock::time_point phase_start_;
     std::chrono::steady_clock::time_point state_enter_time_;
     int log_tick_ = 0;
-    float prev_offset_ = 0.0f;           // 上一帧 offset，检测急弯恢复
-    int   sharp_turn_ticks_ = 0;         // 连续急弯帧计数（需持续>15帧才算真弯）
+    float prev_offset_ = 0.0f;           // 上一帧 offset
+    int   straight_ticks_ = 0;           // 稳定直行帧计数（确认已上正轨）
+    int   sharp_turn_ticks_ = 0;         // 连续急弯帧计数
     bool  post_turn_backup_done_ = false; // 只退一次
 };
 
