@@ -121,20 +121,20 @@ namespace s04 {
 
     // ===== CLIMB_UP：直爬1s上台阶 =====
     constexpr float CLIMB_UP_VX       = 0.50f;   // 直爬速度 (m/s)
-    constexpr float CLIMB_UP_DURATION = 1.0f;    // 直爬时长 (s)
+    constexpr float CLIMB_UP_DURATION = 1.95f;   // 直爬时长 (s)，5.10标定
 
     // ===== CLIMB_ARC：弧线边走边左转 90° =====
     constexpr float CLIMB_ARC_VX     = 0.50f;     // 弧线前进速度 (m/s)
-    constexpr float CLIMB_ARC_VYAW   = 0.23f;     // 弧线左转角速度 (rad/s)
-    constexpr float CLIMB_ARC_TARGET = 1.5708f;   // 目标 90°
+    constexpr float CLIMB_ARC_VYAW   = 0.70f;     // 弧线左转角速度 (rad/s)，5.10标定
+    constexpr float CLIMB_ARC_TARGET = 1.8708f;   // 目标 ~107°（5.10标定）
 
     // ===== CLIMB_DOWN：直下1s =====
     constexpr float CLIMB_DOWN_VX       = 0.50f;   // 直下速度 (m/s)
     constexpr float CLIMB_DOWN_DURATION = 1.0f;    // 直下时长 (s)
 
     // ===== EXIT_FOLLOW：离开台阶 =====
-    constexpr float EXIT_FOLLOW_VX       = 0.18f;
-    constexpr float EXIT_FOLLOW_DURATION = 15.0f;
+    constexpr float EXIT_FOLLOW_VX       = 0.45f;  // 5.10标定：灵动步态高速巡线
+    constexpr float EXIT_FOLLOW_DURATION = 20.0f;  // 5.10标定
     constexpr float GAIT_SWITCH_DELAY    = 3.0f;   // 巡线3s后再切回经典步态
 
     // ===== 安全保护 =====
