@@ -25,7 +25,7 @@ namespace fsm {
 
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH → MOVE_TO_DOT(盲巡3.6s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退1s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH(急弯后退2.5s) → MOVE_TO_DOT(盲巡3.6s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退1s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
 
     phase_            = Phase::APPROACH;
     action_to_play_   = "";
@@ -82,23 +82,14 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        // 弯道预判：turn_trend叠加offset提前转弯（D435i 45°前倾视距短）
-        float trend = sm->vision_data.turn_trend;
-        float effective_offset = line_offset;
-        if (std::abs(trend) > 30.0f) {
-            float boost = trend * 0.8f;
-            if (boost > 80.0f)  boost = 80.0f;
-            if (boost < -80.0f) boost = -80.0f;
-            effective_offset = line_offset + boost;
-        }
-        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(effective_offset, config::s07::APPROACH_VX);
+        auto cmd = sm->vel_ctrl.getNormalTrackingVelocity(line_offset, config::s07::APPROACH_VX);
         sm->robot_driver->move(cmd.vx, cmd.vy, cmd.vyaw);
 
-        // ★ 急弯恢复检测：刚出大弯且没退过 → 后退1s看清下一个弯
+        // ★ 急弯恢复检测：刚出大弯且没退过 → 后退2.5s看清下一个弯
         if (!post_turn_backup_done_ &&
             std::abs(prev_offset_) > 30.0f &&
             std::abs(line_offset)  < 10.0f) {
-            std::cout << "[FSM] 🔙 急弯恢复，后退 1s 拉远视角" << std::endl;
+            std::cout << "[FSM] 🔙 急弯恢复，后退 2.5s 拉远视角" << std::endl;
             phase_       = Phase::POST_TURN_BACKUP;
             phase_start_ = now;
             sm->robot_driver->move(0, 0, 0);
@@ -110,17 +101,17 @@ void State07Detection::execute(StateMachine* sm) {
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][APPROACH] " << dt_phase << "s / "
                       << config::s07::APPROACH_DURATION << "s"
-                      << " offset=" << line_offset << " trend=" << trend
+                      << " offset=" << line_offset
                       << " red_dot=" << (red_dot_seen ? "YES" : "no") << std::endl;
         }
         return;
     }
 
     // ================================================================
-    // 阶段 2：POST_TURN_BACKUP — 急弯后后退 1s，拉开视角看清下个弯
+    // 阶段 2：POST_TURN_BACKUP — 急弯后后退 2.5s，拉开视角看清下个弯
     // ================================================================
     if (phase_ == Phase::POST_TURN_BACKUP) {
-        if (dt_phase > 1.0f) {
+        if (dt_phase > 2.5f) {
             std::cout << "[FSM] ✅ 后退完成 → 继续巡线" << std::endl;
             sm->robot_driver->move(0, 0, 0);
             phase_                  = Phase::APPROACH;
@@ -133,7 +124,7 @@ void State07Detection::execute(StateMachine* sm) {
         sm->robot_driver->move(-0.06f, 0, 0);
 
         if (++log_tick_ % 20 == 0) {
-            std::cout << "[检测][BACKUP] 退后拉视角 " << dt_phase << "s / 1.0s" << std::endl;
+            std::cout << "[检测][BACKUP] 退后拉视角 " << dt_phase << "s / 2.5s" << std::endl;
         }
         return;
     }
