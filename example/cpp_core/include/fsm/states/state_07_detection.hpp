@@ -19,7 +19,7 @@ public:
 private:
     enum class Phase {
         APPROACH,         // 寻迹直行，等待红点出现
-        POST_TURN_BACK,   // 急弯后后退 2.5s（仅触发一次）
+        SECOND_TURN,      // 双弯：第一个弯完成后硬转90°补第二个弯
         MOVE_TO_DOT,      // ★ 红点出现后继续巡线逼近（补偿D435i前倾视角）
         RED_DOT_ALIGN,   // 红点居中 → 狗投影精准覆盖检测点
         TURN_TO_SIGN,    // 左转 90° 面向警示牌
@@ -41,8 +41,9 @@ private:
     std::chrono::steady_clock::time_point phase_start_;
     std::chrono::steady_clock::time_point state_enter_time_;
     int log_tick_ = 0;
-    int  sharp_ticks_ = 0;    // 连续急弯帧计数
-    bool backed_once_ = false; // 只退一次
+    int   sharp_ticks_   = 0;     // 连续急弯帧计数
+    float second_turn_dir_ = 0.0f; // 第二个弯转向（+右 -左）
+    bool  second_turn_done_ = false; // 只补一次
 };
 
 } // namespace fsm

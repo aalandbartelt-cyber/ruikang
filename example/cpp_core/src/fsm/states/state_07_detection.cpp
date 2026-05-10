@@ -25,7 +25,7 @@ namespace fsm {
 
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH(急弯后退2.5s) → MOVE_TO_DOT(盲巡3.6s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退1s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
+    std::cout << "[FSM] 流程: APPROACH(双弯补转) → MOVE_TO_DOT(盲巡3.6s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退1s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
 
     phase_            = Phase::APPROACH;
     action_to_play_   = "";
@@ -34,8 +34,9 @@ void State07Detection::enter(StateMachine* sm) {
     log_tick_         = 0;
     phase_start_      = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
-    sharp_ticks_      = 0;
-    backed_once_      = false;
+    sharp_ticks_       = 0;
+    second_turn_dir_   = 0.0f;
+    second_turn_done_  = false;
 }
 
 void State07Detection::execute(StateMachine* sm) {
@@ -85,20 +86,23 @@ void State07Detection::execute(StateMachine* sm) {
         float vyaw = sm->vel_ctrl.computeYaw(line_offset);
         sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
 
-        // 急弯后后退：|offset|>60 累积帧 > 30 帧(300ms) → 回正(|offset|<20) → 后退一次
-        if (!backed_once_ && std::abs(line_offset) > 60.0f) {
+        // 双弯：|offset|>60累积>30帧 → 回正(|offset|<20) → 记录方向 → 硬转90°补第二个弯
+        if (!second_turn_done_ && std::abs(line_offset) > 60.0f) {
             sharp_ticks_++;
+            second_turn_dir_ = (line_offset > 0) ? -1.0f : 1.0f;  // offset>0需右转(负vyaw)，反则左转
         }
-        if (!backed_once_ && sharp_ticks_ > 30 && std::abs(line_offset) < 20.0f) {
-            std::cout << "[FSM] 🔙 急弯完成 (弯帧" << sharp_ticks_ << ")，后退 2.5s" << std::endl;
-            phase_       = Phase::POST_TURN_BACK;
-            phase_start_ = now;
+        if (!second_turn_done_ && sharp_ticks_ > 30 && std::abs(line_offset) < 20.0f) {
+            std::cout << "[FSM] 🔄 第一个弯完成 (弯帧" << sharp_ticks_
+                      << ")，硬转90°补第二个弯" << std::endl;
+            phase_            = Phase::SECOND_TURN;
+            accumulated_yaw_  = 0.0f;
+            phase_start_      = now;
             sm->robot_driver->move(0, 0, 0);
             sharp_ticks_ = 0;
             return;
         }
         if (std::abs(line_offset) < 20.0f && sharp_ticks_ < 30) {
-            sharp_ticks_ = 0;  // 没入弯就回正了，不计数
+            sharp_ticks_ = 0;
         }
 
         if (++log_tick_ % 50 == 0) {
@@ -111,20 +115,29 @@ void State07Detection::execute(StateMachine* sm) {
     }
 
     // ================================================================
-    // 阶段 2：POST_TURN_BACK — 急弯后后退 2.5s
+    // 阶段 2：SECOND_TURN — 第一个弯完成后硬转 90° 补第二个弯
     // ================================================================
-    if (phase_ == Phase::POST_TURN_BACK) {
-        if (dt_phase > 2.5f) {
-            std::cout << "[FSM] ✅ 后退完成 → 继续巡线" << std::endl;
+    if (phase_ == Phase::SECOND_TURN) {
+        float vyaw_mag   = config::s07::TURN_TO_SIGN_VYAW;
+        float target     = config::s07::TURN_TO_SIGN_TARGET;
+        float turn_vyaw  = second_turn_dir_ * vyaw_mag;
+        accumulated_yaw_ = dt_phase * vyaw_mag;
+
+        if (accumulated_yaw_ >= target) {
+            std::cout << "[FSM] ✅ 第二个弯 90° 完成 ("
+                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 继续巡线" << std::endl;
             sm->robot_driver->move(0, 0, 0);
-            phase_       = Phase::APPROACH;
-            phase_start_ = now;
-            backed_once_ = true;
+            phase_             = Phase::APPROACH;
+            phase_start_       = now;
+            second_turn_done_  = true;
             return;
         }
-        sm->robot_driver->move(-0.12f, 0, 0);
-        if (++log_tick_ % 20 == 0) {
-            std::cout << "[检测][BACK] " << dt_phase << "s / 2.5s" << std::endl;
+
+        sm->robot_driver->move(0, 0, turn_vyaw);
+
+        if (++log_tick_ % 10 == 0) {
+            std::cout << "[检测][2ND_TURN] " << (accumulated_yaw_ * 180.0f / 3.14159f)
+                      << "° / 90°" << std::endl;
         }
         return;
     }
