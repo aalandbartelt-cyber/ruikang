@@ -31,6 +31,31 @@ from communication.udp_sender import UDPSender
 from hardware.realsense_handler import RealSenseHandler
 from hardware.go2_camera import Go2FrontCamera
 
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# D435i 实时预览帧（主循环写入，HTTP 线程读取）
+d435i_preview_frame = None
+
+class MJPEGHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'multipart/x-mixed-replace; boundary=frame')
+        self.end_headers()
+        while True:
+            if d435i_preview_frame is not None:
+                _, buf = cv2.imencode('.jpg', d435i_preview_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                self.wfile.write(b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+
+def _start_d435i_preview(port=8889):
+    """后台线程：MJPEG 推流 D435i 实时画面"""
+    try:
+        server = HTTPServer(('0.0.0.0', port), MJPEGHandler)
+        print(f"[D435i] 实时预览 → http://<狗IP>:{port}")
+        server.serve_forever()
+    except Exception as e:
+        print(f"[D435i] 预览端口 {port} 被占用或启动失败: {e}")
+
 def get_stable(history_deque):
     """防抖函数：连续出现 3 次才认为有效"""
     if not history_deque:
@@ -65,6 +90,9 @@ def main():
         if not rs_handler.start():
             print("❌ D435i 启动失败：未连接硬件")
             rs_handler = None
+        else:
+            # 启动 D435i 实时预览 MJPEG 推流（与处理共用同一路画面）
+            threading.Thread(target=_start_d435i_preview, args=(8889,), daemon=True).start()
     except Exception as e:
         print(f"⚠️ D435i 初始化异常: {e}")
         rs_handler = None
@@ -113,6 +141,10 @@ def main():
             else:
                 color_frame = rs_handler.get_color_frame()
                 depth_front, depth_left, depth_right = rs_handler.get_obstacle_distances()
+
+            # 更新 D435i 预览帧（供 MJPEG HTTP 线程读取）
+            global d435i_preview_frame
+            d435i_preview_frame = color_frame.copy() if color_frame is not None else None
 
             # 接收两个返回值：当前偏移量 和 弯道趋势
             offset, trend = find_line_offset(color_frame, threshold=config.get("black_line_threshold", 60))
