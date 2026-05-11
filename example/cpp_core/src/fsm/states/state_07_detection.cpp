@@ -67,13 +67,23 @@ void State07Detection::execute(StateMachine* sm) {
     // ================================================================
     if (phase_ == Phase::APPROACH) {
         // ===== ★ 平台深度检测（连续帧确认，防噪声漏判） =====
-        bool depth_valid = (sm->vision_data.depth_front > 0.10f && sm->vision_data.depth_front < 9.0f);
-        bool sees_platform = depth_valid && (sm->vision_data.depth_front < config::s07::OBSTACLE_TRIGGER_DIST);
+        // 黑色平台吸收红外光 → D435i 可能返回 0 或极低值
+        // 去掉 >0.10 的最低有效限制，让 depth=0 也能触发
+        // 仅保留 <9.0 防传感器异常大值
+        float d = sm->vision_data.depth_front;
+        bool sees_platform = (d < 9.0f) && (d < config::s07::OBSTACLE_TRIGGER_DIST);
 
         if (sees_platform) {
             platform_confirm_cnt_++;
         } else {
             platform_confirm_cnt_ = 0;  // 一旦丢失立即清零
+        }
+
+        // 调试：每10帧打印深度值，方便现场观察
+        if (log_tick_ % 10 == 0) {
+            std::cout << "[DEBUG] depth_front=" << d
+                      << " valid=" << (d > 0.10f && d < 9.0f ? "Y" : "N")
+                      << " plat_cnf=" << platform_confirm_cnt_ << std::endl;
         }
 
         if (platform_confirm_cnt_ >= config::s07::PLATFORM_CONFIRM_FRAMES) {
