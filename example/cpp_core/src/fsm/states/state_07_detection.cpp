@@ -147,7 +147,7 @@ void State07Detection::execute(StateMachine* sm) {
         return;
     }
     // =====================================================
-    // ★ 阶段：TURN_180 — 遇到平台原地180°掉头（角度累积）
+    // ★ 阶段：TURN_180 — 遇到平台边走边转180°掉头（角度累积）
     // =====================================================
     if (phase_ == Phase::TURN_180) {
         float vyaw_mag   = config::s07::TURN_180_VYAW;
@@ -168,7 +168,7 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        sm->robot_driver->move(0, 0, vyaw_mag);  // 原地左转
+        sm->robot_driver->move(config::s07::TURN_180_VX, 0, vyaw_mag);  // 边走边转
 
         if (++log_tick_ % 10 == 0) {
             std::cout << "[检测][TURN_180] 掉头中... "
