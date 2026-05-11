@@ -147,7 +147,7 @@ namespace s04 {
 // =====================================================
 namespace s07 {
     // ===== APPROACH：寻迹靠近检测点 =====
-    constexpr float APPROACH_VX       = 0.22f;   // 巡线速度（0.22折中：比0.35稳、比0.18快）
+    constexpr float APPROACH_VX       = 0.18f;   // 巡线速度（稳定优先，弯道靠turn_memory处理）
     constexpr float APPROACH_DURATION = 25.0f;   // 寻迹超时 (s)，含90°弯+双急弯+长直道
     // ===== ★ 平台深度检测 + 180度掉头 =====
     constexpr float OBSTACLE_TRIGGER_DIST  = 0.40f;   // 平台触发距离 (m)

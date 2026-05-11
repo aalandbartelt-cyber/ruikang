@@ -63,7 +63,7 @@ void State07Detection::execute(StateMachine* sm) {
 
     // ================================================================
     // 阶段 1：APPROACH — 寻迹直行，等待红点出现
-    // ★ 弯后boost：过完弯100帧(1s)内vyaw×3 + 保底0.35rad/s，捕捉连续第二个弯
+    // ★ 弯后boost：过完弯50帧(0.5s)内vyaw×1.5，轻量提高灵敏度捕捉连续第二个弯
     // ================================================================
     if (phase_ == Phase::APPROACH) {
         // ===== ★ 平台深度检测（连续帧确认，防噪声漏判） =====
@@ -119,20 +119,17 @@ void State07Detection::execute(StateMachine* sm) {
             was_in_turn_ = true;
             boost_dir_   = (line_offset > 0) ? 1.0f : -1.0f;  // offset>0线在右→需正vyaw(左转)
         }
-        // 弯结束：offset回到20以内 → 启动100帧boost
+        // 弯结束：offset回到20以内 → 启动50帧boost
         if (was_in_turn_ && std::abs(line_offset) < 20.0f) {
             was_in_turn_ = false;
-            post_turn_boost_ = 100;  // 1s内vyaw×3
+            post_turn_boost_ = 50;  // 0.5s内vyaw×1.5
         }
 
         float vyaw = sm->vel_ctrl.computeYaw(line_offset);
 
-        // boost期间：vyaw×3，且保证最低0.35rad/s不丢方向
+        // boost期间：vyaw×1.5，轻量提高灵敏度
         if (post_turn_boost_ > 0) {
-            vyaw *= 3.0f;
-            if (std::abs(vyaw) < 0.35f) {
-                vyaw = boost_dir_ * 0.35f;
-            }
+            vyaw *= 1.5f;
         }
 
         sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
