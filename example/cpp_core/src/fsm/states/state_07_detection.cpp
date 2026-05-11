@@ -63,7 +63,7 @@ void State07Detection::execute(StateMachine* sm) {
 
     // ================================================================
     // 阶段 1：APPROACH — 寻迹直行，等待红点出现
-    // ★ 弯后boost：过完弯50帧(0.5s)内vyaw×1.5，轻量提高灵敏度捕捉连续第二个弯
+    // ★ 弯中增强 + 弯后boost：弯中vyaw×1.5确保普通直角弯转够，弯后×1.5持续0.5s捕捉连续弯
     // ================================================================
     if (phase_ == Phase::APPROACH) {
         // ===== ★ 平台深度检测（连续帧确认，防噪声漏判） =====
@@ -127,8 +127,12 @@ void State07Detection::execute(StateMachine* sm) {
 
         float vyaw = sm->vel_ctrl.computeYaw(line_offset);
 
-        // boost期间：vyaw×1.5，轻量提高灵敏度
-        if (post_turn_boost_ > 0) {
+        // 弯中增强：|offset|>60时vyaw×1.5确保普通直角弯能转够
+        // 弯后boost：出弯后持续0.5s vyaw×1.5捕捉连续第二个弯
+        // 二者互斥（if/else if），不会叠加
+        if (std::abs(line_offset) > 60.0f) {
+            vyaw *= 1.5f;
+        } else if (post_turn_boost_ > 0) {
             vyaw *= 1.5f;
         }
 
