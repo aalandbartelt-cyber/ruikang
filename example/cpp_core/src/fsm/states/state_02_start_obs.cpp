@@ -1,11 +1,11 @@
 // src/fsm/states/state_02_start_obs.cpp
-// State02：纯里程触发跨栏 + 跳后寻迹 2 秒 切出
+// State02：纯里程触发跨栏 + 跳后寻迹 2 秒  + 逆时针自转 3° 切出
 //
 // 时间线：
 //   1) enter          初始化里程累加器
 //   2) 阶段A：里程累加  → traveled_dist_ ≥ D_JUMP_TRIGGER 触发跳跃
 //   3) 阶段B：跳跃执行  → 刹车 + jump() + 恢复
-//   4) 阶段C：跳后动作  → 寻迹 2 秒 (200 ticks) -> 切入 State03
+//   4) 阶段C：跳后动作  → 寻迹 2 秒 (200 ticks) -> 原地逆时针转 3° (26 ticks) -> 切入 State03
 //
 #include "fsm/states/state_02_start_obs.hpp"
 #include "fsm/states/state_03_avoidance.hpp"
@@ -58,12 +58,13 @@ void State02StartObs::execute(StateMachine* sm) {
     if (is_jumping_) return;
     
     // ============================================================
-    // 阶段 C：跳跃完成后，固定寻迹 2 秒 -> 进 State03
+    // 阶段 C：跳跃完成后，固定寻迹 2 秒 -> 逆时针自转 3° -> 进 State03
     // ============================================================
     if (post_jump_following_) {
         post_jump_total_ticks_++;
         
         const int TRACK_TICKS = 200; // 寻迹时长：200 帧 (2秒)
+        const int SPIN_TICKS  = 26;  // 自转时长：26 帧 (0.26秒，配合 0.2rad/s 刚好转 3°)
         
         // C.1 寻迹阶段 (0 ~ 2秒)
         if (post_jump_total_ticks_ <= TRACK_TICKS) {
@@ -81,10 +82,20 @@ void State02StartObs::execute(StateMachine* sm) {
                           << std::endl;
             }
         }
-        // C.2 切换阶段
+        // C.2 自转微调阶段 (2秒 ~ 2.26秒)
+        else if (post_jump_total_ticks_ <= TRACK_TICKS + SPIN_TICKS) {
+            if (post_jump_total_ticks_ == TRACK_TICKS + 1) {
+                std::cout << "[FSM] 🌀 寻迹完成，开始逆时针自转 3° (0.2rad/s, 0.26s)..." << std::endl;
+            }
+
+            if (sm->robot_driver) {
+                sm->robot_driver->move(0.0f, 0.0f, 0.2f);
+            }
+        }
+        // C.3 切换阶段
         else {
-            std::cout << "[FSM] ✅ 寻迹完成，刹车→切换步态: 经典→灵动，切入 STATE_03" << std::endl;
-            sm->robot_driver->move(0, 0, 0);  // 先刹车，清除残余 Move 指令
+            std::cout << "[FSM] ✅ 3°微调完成，刹车→切换步态: 经典→灵动，切入 STATE_03" << std::endl;
+            sm->robot_driver->move(0, 0, 0);
             sm->robot_driver->setGait(ruikang::control::GaitType::GAIT_AGILE);
             sm->changeState(new State03Avoidance());
             return;
