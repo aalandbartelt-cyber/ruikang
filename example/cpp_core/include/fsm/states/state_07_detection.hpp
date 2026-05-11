@@ -43,6 +43,9 @@ private:
     int   post_turn_boost_ = 0;
     float boost_dir_       = 0.0f;  // 上一次急弯方向（±1），boost期间保底vyaw用
 
+    // 180°掉头后走稳定路线（低vx、弱boost）
+    bool after_turn_180_ = false;
+
     // 平台深度检测连续帧确认（防噪声单帧误判/漏判）
     int platform_confirm_cnt_ = 0;
 

@@ -2,7 +2,8 @@
 // State07: 检测平台（警示牌识别 + 指定动作执行）
 //
 // 流程：
-//   APPROACH      → 寻迹直行（弯后boost 0.5s过双弯），等待红点
+//   前半段（180°掉头前）：高速（0.37）+ 强弯中增强（×2.54），过普通直角弯 + 双急弯
+//   后半段（180°掉头后）：稳定（0.18）+ 弱弯中增强（×1.5），正常巡线到红点
 //   MOVE_TO_DOT   → 红点出现后继续巡线逼近（补偿D435i前倾视角）
 //   TURN_TO_SIGN  → 原地左转 90° 面向警示牌
 //   BACK_AWAY     → 后退 1s 拉开距离
@@ -24,8 +25,10 @@ namespace fsm {
 
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
-    std::cout << "[FSM] 流程: APPROACH(" << config::s07::APPROACH_DURATION
-              << "s,弯后boost过双弯) → MOVE_TO_DOT(盲巡" << config::s07::RED_DOT_FORWARD_DURATION
+    std::cout << "[FSM] 流程: 前半段高速(" << config::s07::APPROACH_VX
+              << "m/s,×2.54过弯) → 平台检测→TURN_180 → 后半段稳定("
+              << config::s07::AFTER180_VX
+              << "m/s,×1.5过弯) → MOVE_TO_DOT(盲巡" << config::s07::RED_DOT_FORWARD_DURATION
               << "s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退"
               << config::s07::BACK_AWAY_DURATION << "s) → STOP&READ → EXECUTE → WAIT → TURN_BACK(右90°) → EXIT" << std::endl;
 
@@ -38,6 +41,7 @@ void State07Detection::enter(StateMachine* sm) {
     was_in_turn_          = false;
     post_turn_boost_      = 0;
     boost_dir_            = 0.0f;
+    after_turn_180_       = false;
     platform_confirm_cnt_ = 0;
     phase_start_          = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
@@ -119,7 +123,7 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
-        // ===== 弯后boost逻辑：过完急弯后短暂提高灵敏度 =====
+        // ===== 弯后boost逻辑 =====
         if (post_turn_boost_ > 0) {
             post_turn_boost_--;
         }
@@ -127,26 +131,37 @@ void State07Detection::execute(StateMachine* sm) {
         // 检测是否进入急弯 → 记录方向
         if (std::abs(line_offset) > 60.0f) {
             was_in_turn_ = true;
-            boost_dir_   = (line_offset > 0) ? 1.0f : -1.0f;  // offset>0线在右→需正vyaw(左转)
+            boost_dir_   = (line_offset > 0) ? 1.0f : -1.0f;
         }
-        // 弯结束：offset回到20以内 → 启动50帧boost
+        // 弯结束：offset回到20以内 → 清turn_memory（防偏右撞台阶）+ 启动boost
         if (was_in_turn_ && std::abs(line_offset) < 20.0f) {
             was_in_turn_ = false;
-            post_turn_boost_ = 50;  // 0.5s内vyaw×1.5
+            sm->vel_ctrl.turn_memory = 0.0f;
+            sm->vel_ctrl.error_sum   = 0.0f;
+            post_turn_boost_ = 50;
         }
 
         float vyaw = sm->vel_ctrl.computeYaw(line_offset);
 
-        // 弯中增强：|offset|>60时vyaw×1.5确保普通直角弯能转够
-        // 弯后boost：出弯后持续0.5s vyaw×1.5捕捉连续第二个弯
-        // 二者互斥（if/else if），不会叠加
-        if (std::abs(line_offset) > 60.0f) {
-            vyaw *= 1.5f;
-        } else if (post_turn_boost_ > 0) {
-            vyaw *= 1.5f;
+        if (after_turn_180_) {
+            // 后半段：稳定巡线，弱增强
+            if (std::abs(line_offset) > 60.0f) {
+                vyaw *= 1.5f;
+            } else if (post_turn_boost_ > 0) {
+                vyaw *= 1.5f;
+            }
+        } else {
+            // 前半段：高速过弯，强增强（普通直角弯+双急弯）
+            if (std::abs(line_offset) > 50.0f) {
+                vyaw *= 2.54f;
+            } else if (post_turn_boost_ > 0) {
+                vyaw *= 1.5f;
+            }
         }
 
-        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
+        float current_vx = after_turn_180_ ? config::s07::AFTER180_VX
+                                          : config::s07::APPROACH_VX;
+        sm->robot_driver->move(current_vx, 0, vyaw);
 
         if (++log_tick_ % 50 == 0) {
             std::cout << "[检测][APPROACH] " << dt_phase << "s / "
@@ -166,13 +181,15 @@ void State07Detection::execute(StateMachine* sm) {
 
         if (accumulated_yaw_ >= config::s07::TURN_180_TARGET) {
             std::cout << "[FSM] 🔄 180度掉头完成 ("
-                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 重置状态，切回 APPROACH" << std::endl;
+                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 切换后半段稳定模式(vx="
+                      << config::s07::AFTER180_VX << ")" << std::endl;
             sm->robot_driver->move(0, 0, 0);
-            // ★ 掉头后重置巡线状态，防止旧积分/方向干扰
+            // ★ 掉头后重置巡线状态 + 切为稳定模式
             sm->vel_ctrl.reset();
             was_in_turn_      = false;
             post_turn_boost_  = 0;
             boost_dir_        = 0.0f;
+            after_turn_180_   = true;
             platform_confirm_cnt_ = 0;
             phase_       = Phase::APPROACH;
             phase_start_ = now;
@@ -201,7 +218,7 @@ void State07Detection::execute(StateMachine* sm) {
         }
 
         float vyaw = sm->vel_ctrl.computeYaw(line_offset);
-        sm->robot_driver->move(config::s07::APPROACH_VX, 0, vyaw);
+        sm->robot_driver->move(config::s07::AFTER180_VX, 0, vyaw);
 
         if (++log_tick_ % 30 == 0) {
             std::cout << "[检测][MOVE] 逼近红点 " << dt_phase << "s / "

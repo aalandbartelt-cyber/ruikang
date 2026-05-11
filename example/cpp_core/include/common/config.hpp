@@ -146,14 +146,16 @@ namespace s04 {
 // 流程：寻迹走近→停靠→读警示牌→执行动作→等待完成→继续巡线
 // =====================================================
 namespace s07 {
-    // ===== APPROACH：寻迹靠近检测点 =====
-    constexpr float APPROACH_VX       = 0.18f;   // 巡线速度（稳定优先，弯道靠turn_memory处理）
+    // ===== APPROACH 前半段（180°掉头前）：高速过弯 =====
+    constexpr float APPROACH_VX       = 0.37f;   // 高速保证转弯响应
     constexpr float APPROACH_DURATION = 25.0f;   // 寻迹超时 (s)，含90°弯+双急弯+长直道
+    // ===== APPROACH 后半段（180°掉头后）：稳定巡线 =====
+    constexpr float AFTER180_VX       = 0.18f;   // 低速稳定不晃
     // ===== ★ 平台深度检测 + 180度掉头 =====
     constexpr float OBSTACLE_TRIGGER_DIST  = 0.40f;   // 平台触发距离 (m)
     constexpr int   PLATFORM_CONFIRM_FRAMES = 3;      // 连续帧确认（防噪声单帧误判）
     constexpr float TURN_180_VX            = 0.15f;   // 掉头前进速度（边走边转）
-    constexpr float TURN_180_VYAW          = 0.60f;   // 掉头角速度 (rad/s)
+    constexpr float TURN_180_VYAW          = 1.00f;   // 掉头角速度 (rad/s)
     constexpr float TURN_180_TARGET        = 3.1416f; // 180° (π)
     // ===== RED_DOT_FORWARD：检测到红点后继续巡线逼近（D435i 前倾 45°，需补偿） =====
     constexpr float RED_DOT_FORWARD_DURATION = 3.6f;   // 红点出现后盲巡 3.6s 站到红点上（5.9实测）
