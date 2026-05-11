@@ -43,6 +43,9 @@ private:
     int   post_turn_boost_ = 0;
     float boost_dir_       = 0.0f;  // 上一次急弯方向（±1），boost期间保底vyaw用
 
+    // 平台深度检测连续帧确认（防噪声单帧误判/漏判）
+    int platform_confirm_cnt_ = 0;
+
     std::chrono::steady_clock::time_point phase_start_;
     std::chrono::steady_clock::time_point state_enter_time_;
     int log_tick_ = 0;

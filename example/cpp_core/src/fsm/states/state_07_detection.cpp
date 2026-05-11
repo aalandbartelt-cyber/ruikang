@@ -35,10 +35,11 @@ void State07Detection::enter(StateMachine* sm) {
     action_mgr_.reset(new ruikang::control::ActionManager(*sm->robot_driver));
     sm->vel_ctrl.reset();
     log_tick_         = 0;
-    was_in_turn_      = false;
-    post_turn_boost_  = 0;
-    boost_dir_        = 0.0f;
-    phase_start_      = std::chrono::steady_clock::now();
+    was_in_turn_          = false;
+    post_turn_boost_      = 0;
+    boost_dir_            = 0.0f;
+    platform_confirm_cnt_ = 0;
+    phase_start_          = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
 }
 
@@ -65,14 +66,25 @@ void State07Detection::execute(StateMachine* sm) {
     // ★ 弯后boost：过完弯100帧(1s)内vyaw×3 + 保底0.35rad/s，捕捉连续第二个弯
     // ================================================================
     if (phase_ == Phase::APPROACH) {
-        // ===== ★ 新增：优先检查前方黑色障碍物 =====
-        // 过滤掉 0.1 以下的死区噪声，小于触发距离则紧急掉头
-        if (sm->vision_data.depth_front > 0.1f && sm->vision_data.depth_front < config::s07::OBSTACLE_TRIGGER_DIST) {
-            std::cout << "[FSM] ⚠️ 发现黑色障碍物！距离: " << sm->vision_data.depth_front << "m -> 紧急掉头!" << std::endl;
-            phase_       = Phase::TURN_180;
-            phase_start_ = now;               // 重置阶段计时器
-            sm->robot_driver->move(0, 0, 0);  // 紧急刹车
-            return;                           // 直接退出当前循环，不执行后续寻迹
+        // ===== ★ 平台深度检测（连续帧确认，防噪声漏判） =====
+        bool depth_valid = (sm->vision_data.depth_front > 0.10f && sm->vision_data.depth_front < 9.0f);
+        bool sees_platform = depth_valid && (sm->vision_data.depth_front < config::s07::OBSTACLE_TRIGGER_DIST);
+
+        if (sees_platform) {
+            platform_confirm_cnt_++;
+        } else {
+            platform_confirm_cnt_ = 0;  // 一旦丢失立即清零
+        }
+
+        if (platform_confirm_cnt_ >= config::s07::PLATFORM_CONFIRM_FRAMES) {
+            std::cout << "[FSM] ⚠️ 检测到平台！距离=" << sm->vision_data.depth_front
+                      << "m (连续" << platform_confirm_cnt_ << "帧) → 紧急180°掉头!" << std::endl;
+            phase_               = Phase::TURN_180;
+            accumulated_yaw_     = 0.0f;
+            platform_confirm_cnt_ = 0;
+            phase_start_         = now;
+            sm->robot_driver->move(0, 0, 0);
+            return;
         }
 
         bool red_dot_seen = sm->vision_data.red_dot_detected;
@@ -135,21 +147,32 @@ void State07Detection::execute(StateMachine* sm) {
         return;
     }
     // =====================================================
-    // ★ 新增阶段：遇到黑色障碍物，原地 180 度掉头
+    // ★ 阶段：TURN_180 — 遇到平台原地180°掉头（角度累积）
     // =====================================================
     if (phase_ == Phase::TURN_180) {
-        // 计算转够 180 度总共需要几秒
-        float target_time = config::s07::TURN_180_TARGET / config::s07::TURN_180_VYAW;
-        
-        if (dt_phase >= target_time) {
-            // 转够时间了，掉头完成！重新切回 APPROACH 阶段去寻迹
-            std::cout << "[FSM] 🔄 180度掉头完成，切回 APPROACH 继续寻迹" << std::endl;
+        float vyaw_mag   = config::s07::TURN_180_VYAW;
+        accumulated_yaw_ = dt_phase * vyaw_mag;
+
+        if (accumulated_yaw_ >= config::s07::TURN_180_TARGET) {
+            std::cout << "[FSM] 🔄 180度掉头完成 ("
+                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "°) → 重置状态，切回 APPROACH" << std::endl;
+            sm->robot_driver->move(0, 0, 0);
+            // ★ 掉头后重置巡线状态，防止旧积分/方向干扰
+            sm->vel_ctrl.reset();
+            was_in_turn_      = false;
+            post_turn_boost_  = 0;
+            boost_dir_        = 0.0f;
+            platform_confirm_cnt_ = 0;
             phase_       = Phase::APPROACH;
             phase_start_ = now;
-            sm->robot_driver->move(0, 0, 0); // 停稳
-        } else {
-            // 还没转完，继续原地发指令 (x=0, y=0, yaw=设定好的角速度)
-            sm->robot_driver->move(0.0f, 0.0f, config::s07::TURN_180_VYAW);
+            return;
+        }
+
+        sm->robot_driver->move(0, 0, vyaw_mag);  // 原地左转
+
+        if (++log_tick_ % 10 == 0) {
+            std::cout << "[检测][TURN_180] 掉头中... "
+                      << (accumulated_yaw_ * 180.0f / 3.14159f) << "° / 180°" << std::endl;
         }
         return;
     }
