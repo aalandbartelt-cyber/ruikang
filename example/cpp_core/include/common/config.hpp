@@ -111,7 +111,7 @@ namespace s04 {
 
     // ===== ArUco 靠近判断：center_y 超过此阈值认为已走近台阶 =====
     // 前摄 640×480，ArUco 远时 cy≈240，越近越靠下(cy↑)
-    constexpr float ARUCO_NEAR_Y_THRESHOLD = 860.0f;  // 5.10现场标定
+    constexpr float ARUCO_NEAR_Y_THRESHOLD = 850.0f;  // 5.10现场标定
 
     // ===== ALIGN_ARUCO：对齐台阶 =====
     constexpr float ALIGN_TIMEOUT        = 3.0f;   // 对齐最长等待时间 (s)
