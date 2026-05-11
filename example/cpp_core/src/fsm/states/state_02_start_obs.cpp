@@ -29,7 +29,7 @@ void State02StartObs::enter(StateMachine* sm) {
     // 重置所有状态
     is_jumping_              = false;
     post_jump_following_     = false;
-    current_vx_              = 0.0f;
+    current_vx_              = config::s02::CRUISE_VX;  // 直接以目标速度起步，跳过斜坡防止不动
     accel_ignore_ticks_      = config::s02::ACCEL_IGNORE_TICKS;
     traveled_dist_           = 0.0f;
     post_jump_total_ticks_   = 0;
