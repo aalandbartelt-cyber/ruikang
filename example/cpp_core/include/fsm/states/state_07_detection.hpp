@@ -19,6 +19,7 @@ public:
 private:
     enum class Phase {
         APPROACH,         // 寻迹直行，等待红点（弯后短暂boost过双弯）
+        TURN_180,
         MOVE_TO_DOT,      // ★ 红点出现后继续巡线逼近（补偿D435i前倾视角）
         RED_DOT_ALIGN,    // 红点居中 → 狗投影精准覆盖检测点
         TURN_TO_SIGN,     // 左转 90° 面向警示牌

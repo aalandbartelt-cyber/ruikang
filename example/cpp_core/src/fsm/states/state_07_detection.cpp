@@ -65,6 +65,16 @@ void State07Detection::execute(StateMachine* sm) {
     // ★ 弯后boost：过完弯100帧(1s)内vyaw×3 + 保底0.35rad/s，捕捉连续第二个弯
     // ================================================================
     if (phase_ == Phase::APPROACH) {
+        // ===== ★ 新增：优先检查前方黑色障碍物 =====
+        // 过滤掉 0.1 以下的死区噪声，小于触发距离则紧急掉头
+        if (sm->vision_data.depth_front > 0.1f && sm->vision_data.depth_front < config::s07::OBSTACLE_TRIGGER_DIST) {
+            std::cout << "[FSM] ⚠️ 发现黑色障碍物！距离: " << sm->vision_data.depth_front << "m -> 紧急掉头!" << std::endl;
+            phase_       = Phase::TURN_180;
+            phase_start_ = now;               // 重置阶段计时器
+            sm->robot_driver->move(0, 0, 0);  // 紧急刹车
+            return;                           // 直接退出当前循环，不执行后续寻迹
+        }
+
         bool red_dot_seen = sm->vision_data.red_dot_detected;
 
         // 兜底超时：红点一直没出现
@@ -124,7 +134,25 @@ void State07Detection::execute(StateMachine* sm) {
         }
         return;
     }
-
+    // =====================================================
+    // ★ 新增阶段：遇到黑色障碍物，原地 180 度掉头
+    // =====================================================
+    if (phase_ == Phase::TURN_180) {
+        // 计算转够 180 度总共需要几秒
+        float target_time = config::s07::TURN_180_TARGET / config::s07::TURN_180_VYAW;
+        
+        if (dt_phase >= target_time) {
+            // 转够时间了，掉头完成！重新切回 APPROACH 阶段去寻迹
+            std::cout << "[FSM] 🔄 180度掉头完成，切回 APPROACH 继续寻迹" << std::endl;
+            phase_       = Phase::APPROACH;
+            phase_start_ = now;
+            sm->robot_driver->move(0, 0, 0); // 停稳
+        } else {
+            // 还没转完，继续原地发指令 (x=0, y=0, yaw=设定好的角速度)
+            sm->robot_driver->move(0.0f, 0.0f, config::s07::TURN_180_VYAW);
+        }
+        return;
+    }
     // ================================================================
     // 阶段 2：MOVE_TO_DOT — 继续巡线逼近红点（补偿 D435i 45°前倾视角）
     // ================================================================
