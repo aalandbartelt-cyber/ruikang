@@ -28,6 +28,9 @@ struct VisionData {
     // 红点检测（State07 检测平台精确定位）
     bool  red_dot_detected  = false;
     float red_dot_center_x  = -1.0f;  // 红点中心 x（像素坐标），-1 表示未检测到
+
+    // ★ 5.12 新增：视觉端直角弯检测（vision_py 三切片 ROI 断层跳变）
+    bool  is_sharp_turn     = false;
 };
 
 } // namespace ruikang

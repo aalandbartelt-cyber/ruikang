@@ -99,6 +99,8 @@ void UdpReceiver::receiveLoop() {
                     latest_data_.red_dot_detected = j["red_dot_detected"].get<bool>();
                 if (j.contains("red_dot_center_x"))
                     latest_data_.red_dot_center_x = j["red_dot_center_x"].get<float>();
+                if (j.contains("is_sharp_turn"))
+                    latest_data_.is_sharp_turn = j["is_sharp_turn"].get<bool>();
 
             } catch (const json::parse_error& e) {
                 std::cerr << "[UDP] JSON Parse Error: " << e.what() << std::endl;

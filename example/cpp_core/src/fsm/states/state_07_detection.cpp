@@ -2,7 +2,7 @@
 // State07: 检测平台（警示牌识别 + 指定动作执行）
 //
 // 流程：
-//   前半段（180°掉头前）：渐变弯中增强 scale=1+(|o|-40)/80 cap3.0
+//   前半段（180°掉头前）：视觉检测直角弯→原地右转90°→纯PID巡线到平台
 //   后半段（180°掉头后）：稳定（0.18）+ 弱弯中增强（×1.5），正常巡线到红点
 //   MOVE_TO_DOT   → 红点出现后继续巡线逼近（补偿D435i前倾视角）
 //   TURN_TO_SIGN  → 原地左转 90° 面向警示牌
@@ -26,7 +26,7 @@ namespace fsm {
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
     std::cout << "[FSM] 流程: 前半段高速(" << config::s07::APPROACH_VX
-              << "m/s,渐变增强) → 平台检测→TURN_180 → 后半段稳定("
+              << "m/s,视觉90°→纯PID) → 平台检测→TURN_180 → 后半段稳定("
               << config::s07::AFTER180_VX
               << "m/s,×1.5过弯) → MOVE_TO_DOT(盲巡" << config::s07::RED_DOT_FORWARD_DURATION
               << "s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退"
@@ -42,7 +42,9 @@ void State07Detection::enter(StateMachine* sm) {
     post_turn_boost_      = 0;
     boost_dir_            = 0.0f;
     after_turn_180_       = false;
-    platform_confirm_cnt_ = 0;
+    sharpturn_handled_    = false;
+    platform_confirm_cnt_  = 0;
+    sharpturn_confirm_cnt_ = 0;
     phase_start_          = std::chrono::steady_clock::now();
     state_enter_time_ = phase_start_;
 }
@@ -90,7 +92,7 @@ void State07Detection::execute(StateMachine* sm) {
                       << " plat_cnf=" << platform_confirm_cnt_ << std::endl;
         }
 
-        if (platform_confirm_cnt_ >= config::s07::PLATFORM_CONFIRM_FRAMES) {
+        if (sharpturn_handled_ && platform_confirm_cnt_ >= config::s07::PLATFORM_CONFIRM_FRAMES) {
             std::cout << "[FSM] ⚠️ 检测到平台！距离=" << sm->vision_data.depth_front
                       << "m (连续" << platform_confirm_cnt_ << "帧) → 紧急180°掉头!" << std::endl;
             phase_               = Phase::TURN_180;
@@ -123,6 +125,27 @@ void State07Detection::execute(StateMachine* sm) {
             return;
         }
 
+        // ===== ★ 视觉直角弯检测（连续5帧确认，仅触发一次） =====
+        if (!sharpturn_handled_) {
+            if (sm->vision_data.is_sharp_turn) {
+                sharpturn_confirm_cnt_++;
+            } else {
+                sharpturn_confirm_cnt_ = 0;
+            }
+
+            if (sharpturn_confirm_cnt_ >= 10) {
+                std::cout << "[FSM] 🔄 视觉检测到直角弯！(连续" << sharpturn_confirm_cnt_ << "帧) → 原地右转90°" << std::endl;
+                phase_                = Phase::HANDLE_SHARP_TURN;
+                accumulated_yaw_      = 0.0f;
+                phase_start_          = now;
+                was_in_turn_          = false;
+                post_turn_boost_      = 0;
+                sharpturn_confirm_cnt_ = 0;
+                sm->robot_driver->move(0, 0, 0);
+                return;
+            }
+        }
+
         // ===== 弯后boost逻辑 =====
         if (post_turn_boost_ > 0) {
             post_turn_boost_--;
@@ -150,15 +173,8 @@ void State07Detection::execute(StateMachine* sm) {
             } else if (post_turn_boost_ > 0) {
                 vyaw *= 1.5f;
             }
-        } else {
-            // 前半段：渐变弯中增强——offset越大增强越多，无突变
-            float abs_off = std::abs(line_offset);
-            if (abs_off > 40.0f) {
-                float scale = 1.0f + (abs_off - 40.0f) / 80.0f;
-                if (scale > 3.0f) scale = 3.0f;
-                vyaw *= scale;
-            }
         }
+        // 前半段：纯PID循迹，不增强（靠vx=0.37过弧线，靠视觉is_sharp_turn过直角弯）
 
         float current_vx = after_turn_180_ ? config::s07::AFTER180_VX
                                           : config::s07::APPROACH_VX;
@@ -170,6 +186,45 @@ void State07Detection::execute(StateMachine* sm) {
                       << " offset=" << line_offset
                       << " boost=" << (post_turn_boost_ > 0 ? "ON" : "off")
                       << " red_dot=" << (red_dot_seen ? "YES" : "no") << std::endl;
+        }
+        return;
+    }
+    // ====================================================
+    // ★ 阶段：HANDLE_SHARP_TURN — 视觉检测直角弯 → 原地刹车右转90°
+    // ====================================================
+    if (phase_ == Phase::HANDLE_SHARP_TURN) {
+        // 阶段1：盲走2s靠近弯道再转（视觉提前看到了弯，但狗还没到位置）
+        if (dt_phase < 1.6f) {
+            sm->robot_driver->move(config::s07::APPROACH_VX, 0, 0);
+            if (++log_tick_ % 10 == 0) {
+                std::cout << "[检测][TURN_90] 盲走靠近... " << dt_phase << "s / 2.0s" << std::endl;
+            }
+            return;
+        }
+
+        // 阶段2：原地右转90°
+        {
+            float vyaw_mag   = -0.50f;
+            float turn_t     = dt_phase - 2.0f;
+            accumulated_yaw_ = turn_t * std::abs(vyaw_mag);
+
+            if (accumulated_yaw_ >= 1.5708f) {
+                std::cout << "[FSM] ✅ 直角弯转弯完成 → 恢复巡线（已屏蔽后续急弯检测）"
+                          << std::endl;
+                sm->robot_driver->move(0, 0, 0);
+                sharpturn_handled_ = true;
+                phase_       = Phase::APPROACH;
+                phase_start_ = now;
+                log_tick_    = 0;
+                return;
+            }
+
+            sm->robot_driver->move(0, 0, vyaw_mag);
+
+            if (++log_tick_ % 10 == 0) {
+                std::cout << "[检测][TURN_90] 右转中... "
+                          << (accumulated_yaw_ * 180.0f / 3.14159f) << "° / 90°" << std::endl;
+            }
         }
         return;
     }

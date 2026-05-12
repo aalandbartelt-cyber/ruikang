@@ -146,8 +146,8 @@ def main():
             global d435i_preview_frame
             d435i_preview_frame = color_frame.copy() if color_frame is not None else None
 
-            # 接收两个返回值：当前偏移量 和 弯道趋势
-            offset, trend = find_line_offset(color_frame, threshold=config.get("black_line_threshold", 60))
+            # 接收三个返回值：偏移量、弯道趋势、直角弯检测
+            offset, trend, is_sharp_turn = find_line_offset(color_frame, threshold=config.get("black_line_threshold", 60))
 
             # ★ 红点检测：用 D435i 朝下看地面（不是 Go2 前摄！）
             red_dot_detected, red_dot_cx, _ = detect_red_dot(color_frame)
@@ -195,6 +195,7 @@ def main():
                     "aruco_center_y": int(tag_cy),
                     "line_offset": int(offset),
                     "turn_trend": int(trend),
+                    "is_sharp_turn": is_sharp_turn,
                     "depth_front": float(depth_front),
                     "depth_left": float(depth_left),
                     "depth_right": float(depth_right),

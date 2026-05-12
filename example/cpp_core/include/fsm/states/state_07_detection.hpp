@@ -18,7 +18,8 @@ public:
 
 private:
     enum class Phase {
-        APPROACH,         // 寻迹直行，等待红点（弯后短暂boost过双弯）
+        APPROACH,         // 寻迹直行，等待红点
+        HANDLE_SHARP_TURN,// ★ 视觉检测到直角弯，执行预设90°转弯
         TURN_180,
         MOVE_TO_DOT,      // ★ 红点出现后继续巡线逼近（补偿D435i前倾视角）
         RED_DOT_ALIGN,    // 红点居中 → 狗投影精准覆盖检测点
@@ -46,8 +47,12 @@ private:
     // 180°掉头后走稳定路线（低vx、弱boost）
     bool after_turn_180_ = false;
 
-    // 平台深度检测连续帧确认（防噪声单帧误判/漏判）
-    int platform_confirm_cnt_ = 0;
+    // ★ 视觉直角弯是否已处理过（处理后屏蔽后续is_sharp_turn信号）
+    bool sharpturn_handled_ = false;
+
+    // 连续帧确认（防噪声单帧误判/漏判）
+    int platform_confirm_cnt_  = 0;
+    int sharpturn_confirm_cnt_ = 0;
 
     std::chrono::steady_clock::time_point phase_start_;
     std::chrono::steady_clock::time_point state_enter_time_;

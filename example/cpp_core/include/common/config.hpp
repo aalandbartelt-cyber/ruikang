@@ -134,7 +134,7 @@ namespace s04 {
 
     // ===== EXIT_FOLLOW：离开台阶 =====
     constexpr float EXIT_FOLLOW_VX       = 0.45f;  // 5.10标定：灵动步态高速巡线
-    constexpr float EXIT_FOLLOW_DURATION = 20.0f;  // 5.10标定
+    constexpr float EXIT_FOLLOW_DURATION = 6.0f;  // 5.10标定
     constexpr float GAIT_SWITCH_DELAY    = 3.0f;   // 巡线3s后再切回经典步态
 
     // ===== 安全保护 =====
