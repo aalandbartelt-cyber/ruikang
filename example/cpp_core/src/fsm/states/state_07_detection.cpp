@@ -2,7 +2,7 @@
 // State07: 检测平台（警示牌识别 + 指定动作执行）
 //
 // 流程：
-//   前半段（180°掉头前）：高速（0.37）+ 强弯中增强（×2.54），过普通直角弯 + 双急弯
+//   前半段（180°掉头前）：渐变弯中增强 scale=1+(|o|-40)/80 cap3.0
 //   后半段（180°掉头后）：稳定（0.18）+ 弱弯中增强（×1.5），正常巡线到红点
 //   MOVE_TO_DOT   → 红点出现后继续巡线逼近（补偿D435i前倾视角）
 //   TURN_TO_SIGN  → 原地左转 90° 面向警示牌
@@ -26,7 +26,7 @@ namespace fsm {
 void State07Detection::enter(StateMachine* sm) {
     std::cout << "\n[FSM] >>> 进入 STATE_07: 检测平台" << std::endl;
     std::cout << "[FSM] 流程: 前半段高速(" << config::s07::APPROACH_VX
-              << "m/s,×2.54过弯) → 平台检测→TURN_180 → 后半段稳定("
+              << "m/s,渐变增强) → 平台检测→TURN_180 → 后半段稳定("
               << config::s07::AFTER180_VX
               << "m/s,×1.5过弯) → MOVE_TO_DOT(盲巡" << config::s07::RED_DOT_FORWARD_DURATION
               << "s) → TURN_TO_SIGN(左90°) → BACK_AWAY(退"
@@ -67,7 +67,7 @@ void State07Detection::execute(StateMachine* sm) {
 
     // ================================================================
     // 阶段 1：APPROACH — 寻迹直行，等待红点出现
-    // ★ 弯中增强 + 弯后boost：弯中vyaw×1.5确保普通直角弯转够，弯后×1.5持续0.5s捕捉连续弯
+    // 前半段：渐变弯中增强 scale=1+(|o|-40)/80 cap3.0  后半段：vx0.18 + ×1.5弱增强
     // ================================================================
     if (phase_ == Phase::APPROACH) {
         // ===== ★ 平台深度检测（连续帧确认，防噪声漏判） =====
@@ -151,11 +151,12 @@ void State07Detection::execute(StateMachine* sm) {
                 vyaw *= 1.5f;
             }
         } else {
-            // 前半段：高速过弯，强增强（普通直角弯+双急弯）
-            if (std::abs(line_offset) > 50.0f) {
-                vyaw *= 2.54f;
-            } else if (post_turn_boost_ > 0) {
-                vyaw *= 1.5f;
+            // 前半段：渐变弯中增强——offset越大增强越多，无突变
+            float abs_off = std::abs(line_offset);
+            if (abs_off > 40.0f) {
+                float scale = 1.0f + (abs_off - 40.0f) / 80.0f;
+                if (scale > 3.0f) scale = 3.0f;
+                vyaw *= scale;
             }
         }
 
