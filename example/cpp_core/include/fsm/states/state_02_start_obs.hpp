@@ -29,7 +29,6 @@ private:
     
     // ===== 跳跃后寻迹收尾 =====
     int post_jump_total_ticks_ = 0;   // 跳跃后已经过的总 ticks
-    int no_line_ticks_         = 0;   // 连续无线计数
     
     // ===== 调试 =====
     int log_tick_ = 0;

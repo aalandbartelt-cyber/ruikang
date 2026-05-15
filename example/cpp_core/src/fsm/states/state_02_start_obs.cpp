@@ -33,7 +33,6 @@ void State02StartObs::enter(StateMachine* sm) {
     accel_ignore_ticks_      = config::s02::ACCEL_IGNORE_TICKS;
     traveled_dist_           = 0.0f;
     post_jump_total_ticks_   = 0;
-    no_line_ticks_           = 0;
     log_tick_                = 0;
     last_tick_               = std::chrono::steady_clock::now();
     

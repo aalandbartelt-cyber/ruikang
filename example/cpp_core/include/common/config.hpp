@@ -31,24 +31,6 @@ namespace s02 {
     constexpr float BRAKE_BEFORE_JUMP  = 0.8f;
     constexpr float RECOVER_AFTER_JUMP = 0.8f;
 
-    // ===== ★ 新增：跳跃后寻迹阶段参数 ★ =====
-    // 跳跃后至少寻迹这么多 ticks 才考虑切走（防落地抖动误触）
-    // 100 ticks × 10ms = 1 秒
-    constexpr int POST_JUMP_MIN_TICKS = 100;
-
-    // 视觉端"无线"判定阈值：
-    //   - 若 Y 视觉无线时返回特殊值（如 999），改成 > 500
-    //   - 若 Y 视觉无线时返回大幅 offset，用 200 即可
-    //   ⚠️ 5.1 现场需和 Y 视觉端约定，先用 200 占位
-    constexpr float NO_LINE_OFFSET_THRESH = 120.0f;
-
-    // 连续多少帧"无线"才认定走完黑线
-    // 50 ticks × 10ms = 0.5 秒
-    constexpr int NO_LINE_TICKS_TO_EXIT = 50;
-
-    // 兜底超时：跳跃后寻迹超过这么多 ticks 强制退出（避免视觉异常导致死循环）
-    // 1500 ticks × 10ms = 15 秒
-    constexpr int POST_JUMP_TIMEOUT_TICKS = 1500;
 }
 
 // =====================================================
