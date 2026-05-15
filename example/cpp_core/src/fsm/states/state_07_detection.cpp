@@ -36,7 +36,6 @@ void State07Detection::enter(StateMachine* sm) {
     action_to_play_   = "";
     accumulated_yaw_  = 0.0f;
     action_mgr_.reset(new ruikang::control::ActionManager(*sm->robot_driver));
-    sm->vel_ctrl.reset();
     log_tick_         = 0;
     was_in_turn_          = false;
     post_turn_boost_      = 0;
