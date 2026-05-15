@@ -74,10 +74,10 @@ namespace s03 {
     // ===== 5 次转弯的目标角度数组（弧度制） =====
     constexpr float TURN_TARGETS[5] = {
         1.5708f,  // 第 1 次：90度
-        1.5708f,  // 第 2 次：90度
-        1.5708f,  // 第 3 次：90度
-        1.5708f,  // 第 4 次：90度
-        1.5708f   // 第 5 次：90度
+        1.6708f,  // 第 2 次：90度
+        1.9708f,  // 第 5 次：90度
+        2.3708f,  // 第 6 次：60度
+        1.6708f   // 第 8 次：90度
     };
 
     // ===== 5 次转弯方向（左左右右左） =====
@@ -150,7 +150,7 @@ namespace s07 {
     constexpr float APPROACH_VX       = 0.57f;   // 高速保证转弯响应
     constexpr float APPROACH_DURATION = 25.0f;   // 寻迹超时 (s)，含90°弯+双急弯+长直道
     // ===== APPROACH 后半段（180°掉头后）：稳定巡线 =====
-    constexpr float AFTER180_VX       = 0.57f;   // 低速稳定不晃
+    constexpr float AFTER180_VX       = 0.18f;   // 低速稳定不晃
     // ===== ★ 平台深度检测 + 180度掉头 =====
     constexpr float OBSTACLE_TRIGGER_DIST  = 0.40f;   // 平台触发距离 (m)
     constexpr int   PLATFORM_CONFIRM_FRAMES = 3;      // 连续帧确认（防噪声单帧误判）

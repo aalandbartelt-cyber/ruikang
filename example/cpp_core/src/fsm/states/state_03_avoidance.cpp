@@ -137,6 +137,11 @@ void State03Avoidance::execute(StateMachine* sm) {
     if (phase_ == Phase::TURNING) {
         float dt = std::chrono::duration<float>(now - phase_start_).count();
         accumulated_yaw_ = dt * config::s03::TURN_VYAW;
+        bool min_angle_passed = (accumulated_yaw_ >= config::s03::TURN_TARGETS[turn_count_] * 0.7f);
+        bool see_open_path = (depth_front >= 0.50f);
+        if (min_angle_passed && see_open_path) {
+            accumulated_yaw_ = config::s03::TURN_TARGETS[turn_count_];  // 强制达到目标
+        }
         if (accumulated_yaw_ >= config::s03::TURN_TARGETS[turn_count_]) {
             std::cout << "[迷宫] ✅ 第 " << (turn_count_ + 1)
                       << " 次转弯完成 (耗时 " << dt << "s)" << std::endl;
