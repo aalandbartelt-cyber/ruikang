@@ -116,7 +116,7 @@ namespace s04 {
     // ===== ALIGN_ARUCO：对齐台阶 =====
     constexpr float ALIGN_TIMEOUT        = 3.0f;   // 对齐最长等待时间 (s)
     constexpr float ALIGN_CENTER_TOL_PX  = 30.0f;  // ArUco 中心偏差容忍（像素）
-    constexpr float ALIGN_VYAW           = 0.25f;  // 对齐转速
+    constexpr float ALIGN_VYAW           = 0.15f;  // 对齐转速
     constexpr int   IMAGE_CENTER_X       = 320;    // 图像宽度一半（640x480）
 
     // ===== CLIMB_UP：直爬1s上台阶 =====
@@ -125,7 +125,7 @@ namespace s04 {
 
     // ===== CLIMB_ARC：弧线边走边左转 90° =====
     constexpr float CLIMB_ARC_VX     = 0.50f;     // 弧线前进速度 (m/s)
-    constexpr float CLIMB_ARC_VYAW   = 0.70f;     // 弧线左转角速度 (rad/s)，5.10标定
+    constexpr float CLIMB_ARC_VYAW   = 0.80f;     // 弧线左转角速度 (rad/s)，5.10标定
     constexpr float CLIMB_ARC_TARGET = 1.8708f;   // 目标 ~107°（5.10标定）
 
     // ===== CLIMB_DOWN：直下1s =====
@@ -133,8 +133,8 @@ namespace s04 {
     constexpr float CLIMB_DOWN_DURATION = 1.0f;    // 直下时长 (s)
 
     // ===== EXIT_FOLLOW：离开台阶 =====
-    constexpr float EXIT_FOLLOW_VX       = 0.45f;  // 5.10标定：灵动步态高速巡线
-    constexpr float EXIT_FOLLOW_DURATION = 6.0f;  // 5.10标定
+    constexpr float EXIT_FOLLOW_VX       = 0.30f;  // 5.10标定：灵动步态高速巡线
+    constexpr float EXIT_FOLLOW_DURATION = 8.0f;  // 5.10标定
     constexpr float GAIT_SWITCH_DELAY    = 3.0f;   // 巡线3s后再切回经典步态
 
     // ===== 安全保护 =====
@@ -147,10 +147,10 @@ namespace s04 {
 // =====================================================
 namespace s07 {
     // ===== APPROACH 前半段（180°掉头前）：高速过弯 =====
-    constexpr float APPROACH_VX       = 0.37f;   // 高速保证转弯响应
+    constexpr float APPROACH_VX       = 0.57f;   // 高速保证转弯响应
     constexpr float APPROACH_DURATION = 25.0f;   // 寻迹超时 (s)，含90°弯+双急弯+长直道
     // ===== APPROACH 后半段（180°掉头后）：稳定巡线 =====
-    constexpr float AFTER180_VX       = 0.18f;   // 低速稳定不晃
+    constexpr float AFTER180_VX       = 0.57f;   // 低速稳定不晃
     // ===== ★ 平台深度检测 + 180度掉头 =====
     constexpr float OBSTACLE_TRIGGER_DIST  = 0.40f;   // 平台触发距离 (m)
     constexpr int   PLATFORM_CONFIRM_FRAMES = 3;      // 连续帧确认（防噪声单帧误判）
@@ -207,7 +207,7 @@ namespace s07 {
 // State09: 终点跨栏（纯里程触发，参数与 State02 同结构）
 // =====================================================
 namespace s09 {
-    constexpr float CRUISE_VX        = 0.08f;  // 标定阶段与 State02 同速，DRY_RUN 后逐步提
+    constexpr float CRUISE_VX        = 0.18f;  // 标定阶段与 State02 同速，DRY_RUN 后逐步提
     constexpr float SLOW_VX          = 0.06f;
     constexpr int   ACCEL_IGNORE_TICKS = 100;
 
