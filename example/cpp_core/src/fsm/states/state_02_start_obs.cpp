@@ -63,17 +63,18 @@ void State02StartObs::execute(StateMachine* sm) {
         post_jump_total_ticks_++;
         
         const int TRACK_TICKS = 200; // 寻迹时长：200 帧 (2秒)
-        const int SPIN_TICKS  = 19;  // 自转时长：17 帧 (0.17秒，配合 0.2rad/s 转约 2°)
-        
+        const int SPIN_TICKS  = 19;  // 自转时长：19 帧 (0.19秒，配合 0.2rad/s 转约 2°)
+        const int STOP_TICKS  = 100; // 停稳时长：100 帧 (1秒)
+
         // C.1 寻迹阶段 (0 ~ 2秒)
         if (post_jump_total_ticks_ <= TRACK_TICKS) {
             float offset = sm->vision_data.line_offset;
             float vyaw = sm->vel_ctrl.computeYaw(offset);
-            
+
             if (sm->robot_driver) {
                 sm->robot_driver->move(config::s02::CRUISE_VX, 0.0f, vyaw);
             }
-            
+
             if (config::debug::VERBOSE_LOG && (++log_tick_ % 50 == 0)) {
                 std::cout << "[跳后寻迹] total="
                           << post_jump_total_ticks_ * 10 << "ms / 2000ms"
@@ -81,19 +82,28 @@ void State02StartObs::execute(StateMachine* sm) {
                           << std::endl;
             }
         }
-        // C.2 自转微调阶段 (2秒 ~ 2.26秒)
+        // C.2 自转微调阶段 (2秒 ~ 2.19秒)
         else if (post_jump_total_ticks_ <= TRACK_TICKS + SPIN_TICKS) {
             if (post_jump_total_ticks_ == TRACK_TICKS + 1) {
-                std::cout << "[FSM] 🌀 寻迹完成，开始逆时针自转 3° (0.2rad/s, 0.26s)..." << std::endl;
+                std::cout << "[FSM] 🌀 寻迹完成，开始逆时针自转 3° (0.2rad/s, 0.19s)..." << std::endl;
             }
 
             if (sm->robot_driver) {
                 sm->robot_driver->move(0.0f, 0.0f, 0.2f);
             }
         }
-        // C.3 切换阶段
+        // C.3 停稳阶段 (2.19秒 ~ 3.19秒)
+        else if (post_jump_total_ticks_ <= TRACK_TICKS + SPIN_TICKS + STOP_TICKS) {
+            if (post_jump_total_ticks_ == TRACK_TICKS + SPIN_TICKS + 1) {
+                std::cout << "[FSM] ⏸️ 自转完成，停稳 1s ..." << std::endl;
+            }
+            if (sm->robot_driver) {
+                sm->robot_driver->move(0.0f, 0.0f, 0.0f);
+            }
+        }
+        // C.4 切换阶段
         else {
-            std::cout << "[FSM] ✅ 3°微调完成，刹车→切换步态: 经典→灵动，切入 STATE_03" << std::endl;
+            std::cout << "[FSM] ✅ 停稳完成，刹车→切换步态: 经典→灵动，切入 STATE_03" << std::endl;
             sm->robot_driver->move(0, 0, 0);
             sm->robot_driver->setGait(ruikang::control::GaitType::GAIT_AGILE);
             sm->changeState(new State03Avoidance());
