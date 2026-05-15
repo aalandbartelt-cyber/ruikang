@@ -64,7 +64,7 @@ void State02StartObs::execute(StateMachine* sm) {
         post_jump_total_ticks_++;
         
         const int TRACK_TICKS = 200; // 寻迹时长：200 帧 (2秒)
-        const int SPIN_TICKS  = 17;  // 自转时长：17 帧 (0.17秒，配合 0.2rad/s 转约 2°)
+        const int SPIN_TICKS  = 19;  // 自转时长：17 帧 (0.17秒，配合 0.2rad/s 转约 2°)
         
         // C.1 寻迹阶段 (0 ~ 2秒)
         if (post_jump_total_ticks_ <= TRACK_TICKS) {

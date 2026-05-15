@@ -76,8 +76,8 @@ namespace s03 {
         1.5708f,  // 第 1 次：90度
         1.6708f,  // 第 2 次：90度
         1.9708f,  // 第 5 次：90度
-        2.3708f,  // 第 6 次：60度
-        1.6708f   // 第 8 次：90度
+        2.2708f,  // 第 6 次：60度
+        1.5708f   // 第 8 次：90度
     };
 
     // ===== 5 次转弯方向（左左右右左） =====
@@ -87,11 +87,11 @@ namespace s03 {
     // ===== 次转弯后的稳定/停顿缓冲时间（秒） =====
     // 发送速度 0，让机器狗原地踏步恢复重心
     constexpr float STABILIZE_TIMES[5] = {
-        0.4f,  // 第 1 次转完后
-        0.4f,  // 第 2 次转完后
-        0.4f,  // 第 5 次转完后：这里加长到 0.5 秒，强制恢复重心！
-        0.4f,  // 第 6 次转完后
-        0.4f   // 第 8 次转完后
+        0.5f,  // 第 1 次转完后
+        0.5f,  // 第 2 次转完后
+        0.5f,  // 第 5 次转完后
+        0.5f,  // 第 6 次转完后
+        0.5f   // 第 8 次转完后
     };
 
     // ===== 数据有效性检查 =====
@@ -107,7 +107,7 @@ namespace s03 {
 // =====================================================
 namespace s04 {
     // ===== APPROACH：寻迹靠近 =====
-    constexpr float APPROACH_VX = 0.45f;  // 灵动步态下需要较高速度才能动
+    constexpr float APPROACH_VX = 0.36f;  // 灵动步态下需要较高速度才能动
 
     // ===== ArUco 靠近判断：center_y 超过此阈值认为已走近台阶 =====
     // 前摄 640×480，ArUco 远时 cy≈240，越近越靠下(cy↑)
@@ -134,11 +134,11 @@ namespace s04 {
 
     // ===== EXIT_FOLLOW：离开台阶 =====
     constexpr float EXIT_FOLLOW_VX       = 0.30f;  // 5.10标定：灵动步态高速巡线
-    constexpr float EXIT_FOLLOW_DURATION = 8.0f;  // 5.10标定
+    constexpr float EXIT_FOLLOW_DURATION = 17.0f;  // 5.10标定
     constexpr float GAIT_SWITCH_DELAY    = 3.0f;   // 巡线3s后再切回经典步态
 
     // ===== 安全保护 =====
-    constexpr float TOTAL_TIMEOUT = 60.0f;
+    constexpr float TOTAL_TIMEOUT = 80.0f;
 }
 
 // =====================================================
@@ -147,10 +147,10 @@ namespace s04 {
 // =====================================================
 namespace s07 {
     // ===== APPROACH 前半段（180°掉头前）：高速过弯 =====
-    constexpr float APPROACH_VX       = 0.57f;   // 高速保证转弯响应
+    constexpr float APPROACH_VX       = 0.50f;   // 高速保证转弯响应
     constexpr float APPROACH_DURATION = 25.0f;   // 寻迹超时 (s)，含90°弯+双急弯+长直道
     // ===== APPROACH 后半段（180°掉头后）：稳定巡线 =====
-    constexpr float AFTER180_VX       = 0.18f;   // 低速稳定不晃
+    constexpr float AFTER180_VX       = 0.25f;   // 低速稳定不晃
     // ===== ★ 平台深度检测 + 180度掉头 =====
     constexpr float OBSTACLE_TRIGGER_DIST  = 0.40f;   // 平台触发距离 (m)
     constexpr int   PLATFORM_CONFIRM_FRAMES = 3;      // 连续帧确认（防噪声单帧误判）
@@ -161,7 +161,7 @@ namespace s07 {
     constexpr float RED_DOT_FORWARD_DURATION = 3.6f;   // 红点出现后盲巡 3.6s 站到红点上（5.9实测）
 
     // ===== BACK_AWAY：左转后离警示牌太近，后退拉开距离 =====
-    constexpr float BACK_AWAY_VX       = -0.06f;  // 后退速度（负 = 后退）
+    constexpr float BACK_AWAY_VX       = -0.12f;  // 后退速度（负 = 后退）
     constexpr float BACK_AWAY_DURATION = 1.0f;    // 后退时长 (s)
 
     // ===== RED_DOT_ALIGN：红点精确定位 =====
@@ -178,7 +178,7 @@ namespace s07 {
     constexpr float STOP_DURATION     = 1.0f;    // 停稳确认时间 (s)
 
     // ===== WAIT_ACTION：等待动作完成 =====
-    constexpr float ACTION_TIMEOUT    = 3.0f;
+    constexpr float ACTION_TIMEOUT    = 5.0f;
 
     // ===== TURN_BACK：动作完成后右转 90° 回正，面向巡线方向 =====
     constexpr float TURN_BACK_VYAW   = 0.50f;   // 右转角速度 (rad/s)
@@ -189,7 +189,7 @@ namespace s07 {
     constexpr float EXIT_FOLLOW_DURATION = 3.0f;
 
     // ===== 安全保护 =====
-    constexpr float TOTAL_TIMEOUT     = 45.0f;   // 含两次原地转弯，适当放宽
+    constexpr float TOTAL_TIMEOUT     = 50.0f;   // 含两次原地转弯，适当放宽
 
     // ★ 警示牌 → 动作映射（由 ActionManager::triggerAction 非阻塞执行）
     //   伸懒腰(stretch) / 打招呼(greet) / 闪灯(flash_lights) — 三项均为非阻塞，≤3s
@@ -207,7 +207,7 @@ namespace s07 {
 // State09: 终点跨栏（纯里程触发，参数与 State02 同结构）
 // =====================================================
 namespace s09 {
-    constexpr float CRUISE_VX        = 0.18f;  // 标定阶段与 State02 同速，DRY_RUN 后逐步提
+    constexpr float CRUISE_VX        = 0.25f;  // 标定阶段与 State02 同速，DRY_RUN 后逐步提
     constexpr float SLOW_VX          = 0.06f;
     constexpr int   ACCEL_IGNORE_TICKS = 100;
 
