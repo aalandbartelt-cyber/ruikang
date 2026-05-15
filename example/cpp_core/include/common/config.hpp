@@ -102,7 +102,7 @@ namespace s04 {
 
     // ===== CLIMB_UP：直爬1s上台阶 =====
     constexpr float CLIMB_UP_VX       = 0.50f;   // 直爬速度 (m/s)
-    constexpr float CLIMB_UP_DURATION = 1.95f;   // 直爬时长 (s)，5.10标定
+    constexpr float CLIMB_UP_DURATION = 1.96f;   // 直爬时长 (s)，5.10标定
 
     // ===== CLIMB_ARC：弧线边走边左转 90° =====
     constexpr float CLIMB_ARC_VX     = 0.50f;     // 弧线前进速度 (m/s)
@@ -143,7 +143,7 @@ namespace s07 {
 
     // ===== BACK_AWAY：左转后离警示牌太近，后退拉开距离 =====
     constexpr float BACK_AWAY_VX       = -0.15f;  // 后退速度（负 = 后退）
-    constexpr float BACK_AWAY_DURATION = 1.0f;    // 后退时长 (s)
+    constexpr float BACK_AWAY_DURATION = 1.5f;    // 后退时长 (s)
 
     // ===== RED_DOT_ALIGN：红点精确定位 =====
     constexpr float RED_DOT_CENTER_TOL_PX = 25.0f;  // 红点中心偏差容忍（像素）
@@ -188,12 +188,12 @@ namespace s07 {
 // State09: 终点跨栏（纯里程触发，参数与 State02 同结构）
 // =====================================================
 namespace s09 {
-    constexpr float CRUISE_VX        = 0.25f;  // 标定阶段与 State02 同速，DRY_RUN 后逐步提
+    constexpr float CRUISE_VX        = 1.00f;  // 
     constexpr float SLOW_VX          = 0.06f;
     constexpr int   ACCEL_IGNORE_TICKS = 100;
 
     // 【★ 5.1 标定 ★】放置平台→终点障碍物的距离
-    constexpr float D_JUMP_TRIGGER     = 3.00f;  // 5.9 现场标定
+    constexpr float D_JUMP_TRIGGER     = 3.30f;  // 5.9 现场标定
 
     constexpr float BRAKE_BEFORE_JUMP  = 1.5f;
     constexpr float RECOVER_AFTER_JUMP = 0.5f;
