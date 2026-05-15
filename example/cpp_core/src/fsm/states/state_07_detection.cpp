@@ -426,6 +426,7 @@ void State07Detection::execute(StateMachine* sm) {
         if (!action_mgr_->isDone()) {
             if (dt_phase > config::s07::ACTION_TIMEOUT) {
                 std::cout << "[FSM] ⏰ 动作超时 (" << dt_phase << "s)，右转回正" << std::endl;
+                sm->robot_driver->setGait(ruikang::control::GaitType::GAIT_CLASSIC);
                 phase_            = Phase::TURN_BACK;
                 accumulated_yaw_  = 0.0f;
                 phase_start_      = now;
@@ -440,6 +441,7 @@ void State07Detection::execute(StateMachine* sm) {
         }
 
         std::cout << "[FSM] ✅ 动作完成: " << action_to_play_ << " → 右转 90° 回正" << std::endl;
+        sm->robot_driver->setGait(ruikang::control::GaitType::GAIT_CLASSIC);
         phase_            = Phase::TURN_BACK;
         accumulated_yaw_  = 0.0f;
         phase_start_      = now;
