@@ -199,7 +199,7 @@ namespace s09 {
     constexpr float RECOVER_AFTER_JUMP = 0.5f;
 
     // 跳跃后寻迹进入蓝色启停区 (ticks, 10ms/tick)
-    constexpr int   POST_JUMP_TICKS       = 120;     // 1.5s 慢速寻迹
+    constexpr int   POST_JUMP_TICKS       = 180;     // 1.5s 慢速寻迹
     constexpr int   POST_JUMP_BRAKE_TICKS = 50;      // 跳后先发零速 0.5s，刹稳再走
     constexpr float POST_JUMP_VX          = 0.25f;   // 跳后减速寻迹，避免冲过头
 }
