@@ -185,6 +185,12 @@ void RobotDriver::lockMotors() {
     emergencyDamp();
 }
 
+void RobotDriver::balanceStand() {
+    if (!is_connected || sport_client == nullptr) return;
+    sport_client->BalanceStand();
+    std::cout << "[RobotDriver] 🦿 BalanceStand: 站立锁定，电机保持力矩" << std::endl;
+}
+
 void RobotDriver::stopMove() {
     move(0.0f, 0.0f, 0.0f);
 }

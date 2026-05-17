@@ -102,7 +102,7 @@ namespace s04 {
 
     // ===== CLIMB_UP：直爬1s上台阶 =====
     constexpr float CLIMB_UP_VX       = 0.50f;   // 直爬速度 (m/s)
-    constexpr float CLIMB_UP_DURATION = 1.96f;   // 直爬时长 (s)，5.10标定
+    constexpr float CLIMB_UP_DURATION = 2.00f;   // 直爬时长 (s)，5.10标定
 
     // ===== CLIMB_ARC：弧线边走边左转 90° =====
     constexpr float CLIMB_ARC_VX     = 0.50f;     // 弧线前进速度 (m/s)
@@ -193,13 +193,15 @@ namespace s09 {
     constexpr int   ACCEL_IGNORE_TICKS = 100;
 
     // 【★ 5.1 标定 ★】放置平台→终点障碍物的距离
-    constexpr float D_JUMP_TRIGGER     = 3.30f;  // 5.9 现场标定
+    constexpr float D_JUMP_TRIGGER     = 3.40f;  // 5.9 现场标定
 
     constexpr float BRAKE_BEFORE_JUMP  = 1.5f;
     constexpr float RECOVER_AFTER_JUMP = 0.5f;
 
     // 跳跃后寻迹进入蓝色启停区 (ticks, 10ms/tick)
-    constexpr int POST_JUMP_TICKS = 150;  // 1.5s，需 5.10 标定
+    constexpr int   POST_JUMP_TICKS       = 120;     // 1.5s 慢速寻迹
+    constexpr int   POST_JUMP_BRAKE_TICKS = 50;      // 跳后先发零速 0.5s，刹稳再走
+    constexpr float POST_JUMP_VX          = 0.25f;   // 跳后减速寻迹，避免冲过头
 }
 
 // =====================================================

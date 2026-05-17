@@ -71,6 +71,9 @@ public:
     // 终点锁死电机（进入阻尼态）
     void lockMotors();
 
+    // SDK 站立锁定（BalanceStand，电机保持力矩，狗站立不动）
+    void balanceStand();
+
     // 紧急刹车（速度归零）
     void stopMove();
 };

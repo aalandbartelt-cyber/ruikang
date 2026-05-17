@@ -14,7 +14,7 @@ public:
     void exit(StateMachine* sm) override;
 
 private:
-    bool locked_ = false;
+    bool standing_locked_ = false;
     std::chrono::steady_clock::time_point state_enter_time_;
     int log_tick_ = 0;
 };

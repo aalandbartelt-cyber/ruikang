@@ -46,25 +46,36 @@ void State09EndObs::execute(StateMachine* sm) {
     if (is_jumping_) return;
 
     // ============================================================
-    // 阶段 C：跳跃后寻迹进入蓝色启停区 → State10
+    // 阶段 C：跳跃后先零速刹稳 → 慢速寻迹进蓝色启停区 → State10
     // ============================================================
     if (post_jump_following_) {
         post_jump_ticks_++;
 
-        if (post_jump_ticks_ > config::s09::POST_JUMP_TICKS) {
+        // C.0 跳后总 ticks 超时 → 切 State10
+        if (post_jump_ticks_ > config::s09::POST_JUMP_BRAKE_TICKS + config::s09::POST_JUMP_TICKS) {
             std::cout << "[FSM] 进入蓝色启停区，切入 STATE_10" << std::endl;
             sm->changeState(new State10Finish());
             return;
         }
 
-        float offset = sm->vision_data.line_offset;
-        float vyaw   = sm->vel_ctrl.computeYaw(offset);
-        sm->robot_driver->move(config::s09::CRUISE_VX, 0.0f, vyaw);
+        // C.1 零速刹车阶段：先稳住，避免跳后惯性导致冲过头
+        if (post_jump_ticks_ <= config::s09::POST_JUMP_BRAKE_TICKS) {
+            sm->robot_driver->move(0.0f, 0.0f, 0.0f);
+            if (post_jump_ticks_ == 1) {
+                std::cout << "[FSM] 跳后零速刹车 " << config::s09::POST_JUMP_BRAKE_TICKS * 10 << "ms ..." << std::endl;
+            }
+        }
+        // C.2 慢速寻迹阶段
+        else {
+            float offset = sm->vision_data.line_offset;
+            float vyaw   = sm->vel_ctrl.computeYaw(offset);
+            sm->robot_driver->move(config::s09::POST_JUMP_VX, 0.0f, vyaw);
 
-        if (++log_tick_ % 50 == 0) {
-            std::cout << "[跳后寻迹] " << post_jump_ticks_ << " / "
-                      << config::s09::POST_JUMP_TICKS << " ticks"
-                      << " offset=" << offset << std::endl;
+            if (++log_tick_ % 50 == 0) {
+                std::cout << "[跳后寻迹] " << (post_jump_ticks_ - config::s09::POST_JUMP_BRAKE_TICKS)
+                          << " / " << config::s09::POST_JUMP_TICKS << " ticks"
+                          << " offset=" << offset << std::endl;
+            }
         }
         return;
     }
